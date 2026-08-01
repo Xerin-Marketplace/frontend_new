@@ -42,6 +42,7 @@ import {
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
+import { PhoneInput } from "@/components/ui/phone-input"
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -174,7 +175,7 @@ export default function UserSettingsPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="phone">Phone</FieldLabel>
-                <Input id="phone" value={profile.phone ?? ""} onChange={(e) => updateProfile("phone", e.target.value)} />
+                <PhoneInput id="phone" value={profile.phone ?? ""} onChange={(val) => updateProfile("phone", val)} />
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">

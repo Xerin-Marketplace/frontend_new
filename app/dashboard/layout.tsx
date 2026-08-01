@@ -18,6 +18,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { Toaster } from "@/components/ui/toast"
 import { useAuth } from "@/lib/auth-context"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ModeToggle } from "@/components/mode-toggle"
 
 const pageTitles: Record<string, string> = {
   // Seller
@@ -144,6 +145,9 @@ export default function DashboardLayout({
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
+          </div>
+          <div className="ml-auto px-4">
+            <ModeToggle />
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">

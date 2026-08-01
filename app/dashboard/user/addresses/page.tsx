@@ -35,6 +35,7 @@ import {
   Star,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
+import { PhoneInput } from "@/components/ui/phone-input"
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -266,7 +267,7 @@ function AddressForm({
         </div>
         <Field>
           <FieldLabel htmlFor="phone">Phone Number</FieldLabel>
-          <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+255..." required />
+          <PhoneInput id="phone" value={phone} onChange={setPhone} required />
         </Field>
         <Field>
           <FieldLabel htmlFor="addressLine">Address Line</FieldLabel>

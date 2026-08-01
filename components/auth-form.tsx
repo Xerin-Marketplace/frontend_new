@@ -15,7 +15,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Mail, Lock, User, Phone, Store, Eye, EyeOff, ShieldCheck, ArrowLeft, Loader2 } from "lucide-react"
+import { Mail, Lock, User, Store, Eye, EyeOff, ShieldCheck, ArrowLeft, Loader2 } from "lucide-react"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { useAuth, type ApiError } from "@/lib/auth-context"
 import { api } from "@/lib/api"
 
@@ -462,18 +463,12 @@ function AuthFormInner({
               </Field>
               <Field>
                 <FieldLabel htmlFor="reg-phone">Phone</FieldLabel>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="reg-phone"
-                    type="tel"
-                    placeholder="+255 7XX XXX XXX"
-                    className="pl-9"
-                    value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    required
-                  />
-                </div>
+                <PhoneInput
+                  id="reg-phone"
+                  value={regPhone}
+                  onChange={setRegPhone}
+                  required
+                />
               </Field>
               <Field>
                 <FieldLabel htmlFor="reg-password">Password</FieldLabel>
@@ -598,18 +593,12 @@ function AuthFormInner({
               </Field>
               <Field>
                 <FieldLabel htmlFor="seller-phone">Phone Number</FieldLabel>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="seller-phone"
-                    type="tel"
-                    placeholder="+255 7XX XXX XXX"
-                    className="pl-9"
-                    value={sellerPhone}
-                    onChange={(e) => setSellerPhone(e.target.value)}
-                    required
-                  />
-                </div>
+                <PhoneInput
+                  id="seller-phone"
+                  value={sellerPhone}
+                  onChange={setSellerPhone}
+                  required
+                />
               </Field>
               <Field>
                 <FieldLabel>Business Categories</FieldLabel>
@@ -756,21 +745,15 @@ function OtpVerificationForm({
           {!phone && (
             <Field>
               <FieldLabel htmlFor="otp-phone">Phone Number</FieldLabel>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="otp-phone"
-                  type="tel"
-                  placeholder="+255 7XX XXX XXX"
-                  className="pl-9"
-                  value={localPhone}
-                  onChange={(e) => {
-                    setLocalPhone(e.target.value)
-                    onPhoneChange(e.target.value)
-                  }}
-                  required
-                />
-              </div>
+              <PhoneInput
+                id="otp-phone"
+                value={localPhone}
+                onChange={(val) => {
+                  setLocalPhone(val)
+                  onPhoneChange(val)
+                }}
+                required
+              />
               <FieldDescription>Enter the phone number you registered with.</FieldDescription>
             </Field>
           )}

@@ -41,6 +41,7 @@ import {
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -219,7 +220,7 @@ export default function SellerSettingsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="phone">Phone</FieldLabel>
-                <Input id="phone" value={account.phone} onChange={(e) => updateAccount("phone", e.target.value)} />
+                <PhoneInput id="phone" value={account.phone} onChange={(val) => updateAccount("phone", val)} />
               </Field>
             </div>
           </FieldGroup>

@@ -30,6 +30,7 @@ import * as Icons from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api"
+import { ModeToggle } from "@/components/mode-toggle"
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -136,6 +137,7 @@ export function Header() {
 
         {/* Actions */}
         <div className="ml-auto flex items-center gap-0.5 md:gap-2">
+          <ModeToggle />
           <Link
             href="/wishlist"
             className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "relative shrink-0")}

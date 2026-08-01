@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, Suspense, useEffect } from "react"
+import { useState, Suspense, useEffect, useRef, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { toast } from "@/components/ui/toast"
@@ -15,11 +15,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Mail, Lock, User, Phone, Store, Eye, EyeOff } from "lucide-react"
+import { Mail, Lock, User, Phone, Store, Eye, EyeOff, ShieldCheck, ArrowLeft, Loader2 } from "lucide-react"
 import { useAuth, type ApiError } from "@/lib/auth-context"
 import { api } from "@/lib/api"
 
-type AuthMode = "login" | "register" | "seller"
+type AuthMode = "login" | "register" | "seller" | "otp"
 
 type BusinessCategory = {
   id: string
@@ -38,7 +38,7 @@ function AuthFormInner({
 }: React.ComponentProps<"div">) {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { login, register, registerSeller } = useAuth()
+  const { login, register, registerSeller, sendOtp, verifyOtp } = useAuth()
   const initialTab = searchParams.get("tab") as AuthMode
   const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState<AuthMode>(
@@ -47,6 +47,41 @@ function AuthFormInner({
       : "login"
   )
   const [showPassword, setShowPassword] = useState(false)
+
+  // OTP state
+  const [otpPhone, setOtpPhone] = useState("")
+  const [otpPurpose, setOtpPurpose] = useState<string | undefined>(undefined)
+  const [otpEmail, setOtpEmail] = useState("")
+  const [resendTimer, setResendTimer] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const startResendTimer = useCallback(() => {
+    setResendTimer(60)
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = setInterval(() => {
+      setResendTimer((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [])
+
+  const switchToOtp = (phone: string, email: string, purpose?: string) => {
+    setOtpPhone(phone)
+    setOtpEmail(email)
+    setOtpPurpose(purpose)
+    setMode("otp")
+    startResendTimer()
+  }
 
   // Login state
   const [loginEmail, setLoginEmail] = useState("")
@@ -112,11 +147,30 @@ function AuthFormInner({
         router.push("/dashboard/user")
       }
     } catch (err) {
-      toast.add({
-        title: "Sign in failed",
-        description: getApiError(err),
-        type: "error",
-      })
+      const apiErr = err as ApiError
+      const detail = apiErr?.detail || ""
+      // If account is not verified, redirect to OTP verification
+      if (detail.toLowerCase().includes("not verified") || detail.toLowerCase().includes("verification")) {
+        toast.add({
+          title: "Verification required",
+          description: "Please verify your phone number to continue.",
+          type: "warning",
+        })
+        // Try to find the user's phone by their email
+        try {
+          const res = await api.get<{ phone: string }>(`/users/lookup?email=${encodeURIComponent(loginEmail)}`)
+          switchToOtp(res.phone, loginEmail, "register")
+        } catch {
+          // If lookup fails, ask user to enter phone manually
+          switchToOtp("", loginEmail, "register")
+        }
+      } else {
+        toast.add({
+          title: "Sign in failed",
+          description: getApiError(err),
+          type: "error",
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -135,11 +189,10 @@ function AuthFormInner({
       })
       toast.add({
         title: "Account created!",
-        description: "Welcome to XerinMarket. Check your phone for OTP to verify your account.",
+        description: "A verification code has been sent to your phone.",
         type: "success",
       })
-      setMode("login")
-      setLoginEmail(regEmail)
+      switchToOtp(regPhone, regEmail, "register")
     } catch (err) {
       toast.add({
         title: "Registration failed",
@@ -175,11 +228,10 @@ function AuthFormInner({
       })
       toast.add({
         title: "Seller account created!",
-        description: "Check your phone for OTP to verify your account.",
+        description: "A verification code has been sent to your phone.",
         type: "success",
       })
-      setMode("login")
-      setLoginEmail(sellerEmail)
+      switchToOtp(sellerPhone, sellerEmail, "register_seller")
     } catch (err) {
       toast.add({
         title: "Seller registration failed",
@@ -212,6 +264,39 @@ function AuthFormInner({
         </p>
       </div>
 
+      {mode === "otp" ? (
+        <OtpVerificationForm
+          phone={otpPhone}
+          email={otpEmail}
+          purpose={otpPurpose}
+          resendTimer={resendTimer}
+          onResend={async () => {
+            try {
+              await sendOtp(otpPhone, otpPurpose)
+              toast.add({ title: "Code sent", description: "A new verification code has been sent.", type: "info" })
+              startResendTimer()
+            } catch (err) {
+              toast.add({ title: "Failed to resend", description: getApiError(err), type: "error" })
+            }
+          }}
+          onVerify={async (code) => {
+            setLoading(true)
+            try {
+              await verifyOtp(otpPhone, code, otpPurpose)
+              toast.add({ title: "Phone verified!", description: "Your account has been verified. You can now sign in.", type: "success" })
+              setMode("login")
+              setLoginEmail(otpEmail)
+            } catch (err) {
+              toast.add({ title: "Verification failed", description: getApiError(err), type: "error" })
+            } finally {
+              setLoading(false)
+            }
+          }}
+          loading={loading}
+          onBack={() => setMode("login")}
+          onPhoneChange={setOtpPhone}
+        />
+      ) : (
       <Tabs
         value={mode}
         onValueChange={(v) => setMode(v as AuthMode)}
@@ -397,12 +482,12 @@ function AuthFormInner({
                   <Input
                     id="reg-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Min. 10 chars, 1 uppercase, 1 number"
+                    placeholder="Min. 8 chars, 1 uppercase, 1 number"
                     className="pl-9 pr-9"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
                     required
-                    minLength={10}
+                    minLength={8}
                   />
                   <button
                     type="button"
@@ -413,7 +498,7 @@ function AuthFormInner({
                   </button>
                 </div>
                 <FieldDescription>
-                  At least 10 characters with 1 uppercase letter and 1 number.
+                  At least 8 characters with 1 uppercase letter and 1 number.
                 </FieldDescription>
               </Field>
               <Field orientation="horizontal" className="items-start gap-2">
@@ -558,12 +643,12 @@ function AuthFormInner({
                   <Input
                     id="seller-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Min. 10 chars, 1 uppercase, 1 number"
+                    placeholder="Min. 8 chars, 1 uppercase, 1 number"
                     className="pl-9 pr-9"
                     value={sellerPassword}
                     onChange={(e) => setSellerPassword(e.target.value)}
                     required
-                    minLength={10}
+                    minLength={8}
                   />
                   <button
                     type="button"
@@ -574,7 +659,7 @@ function AuthFormInner({
                   </button>
                 </div>
                 <FieldDescription>
-                  At least 10 characters with 1 uppercase letter and 1 number.
+                  At least 8 characters with 1 uppercase letter and 1 number.
                 </FieldDescription>
               </Field>
               <Field orientation="horizontal" className="items-start gap-2">
@@ -619,6 +704,131 @@ function AuthFormInner({
           </form>
         </TabsContent>
       </Tabs>
+      )}
+    </div>
+  )
+}
+
+function OtpVerificationForm({
+  phone,
+  email,
+  purpose,
+  resendTimer,
+  loading,
+  onResend,
+  onVerify,
+  onBack,
+  onPhoneChange,
+}: {
+  phone: string
+  email: string
+  purpose?: string
+  resendTimer: number
+  loading: boolean
+  onResend: () => void
+  onVerify: (code: string) => void
+  onBack: () => void
+  onPhoneChange: (phone: string) => void
+}) {
+  const [otp, setOtp] = useState("")
+  const [localPhone, setLocalPhone] = useState(phone)
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (otp.length < 4) return
+    onVerify(otp)
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10">
+          <ShieldCheck className="size-7 text-primary" />
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight">Verify Your Phone</h1>
+        <p className="text-sm text-muted-foreground">
+          We sent a verification code to your phone number. Enter it below to activate your account.
+        </p>
+      </div>
+
+      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <FieldGroup>
+          {!phone && (
+            <Field>
+              <FieldLabel htmlFor="otp-phone">Phone Number</FieldLabel>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="otp-phone"
+                  type="tel"
+                  placeholder="+255 7XX XXX XXX"
+                  className="pl-9"
+                  value={localPhone}
+                  onChange={(e) => {
+                    setLocalPhone(e.target.value)
+                    onPhoneChange(e.target.value)
+                  }}
+                  required
+                />
+              </div>
+              <FieldDescription>Enter the phone number you registered with.</FieldDescription>
+            </Field>
+          )}
+
+          {phone && (
+            <div className="rounded-lg border bg-muted/50 p-4 text-center">
+              <p className="text-sm text-muted-foreground">Code sent to</p>
+              <p className="text-base font-semibold">{phone}</p>
+            </div>
+          )}
+
+          <Field>
+            <FieldLabel htmlFor="otp-code">Verification Code</FieldLabel>
+            <Input
+              id="otp-code"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="Enter 6-digit code"
+              className="text-center text-lg font-bold tracking-[0.3em]"
+              maxLength={10}
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+              required
+              autoFocus
+            />
+            <FieldDescription>Enter the 6-digit code sent to your phone.</FieldDescription>
+          </Field>
+
+          <Button type="submit" className="w-full" loading={loading} disabled={otp.length < 4}>
+            {loading ? "Verifying..." : "Verify Code"}
+          </Button>
+
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="size-3.5" /> Back to login
+            </button>
+            {resendTimer > 0 ? (
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" />
+                Resend in {resendTimer}s
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={onResend}
+                className="text-sm font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+              >
+                Resend code
+              </button>
+            )}
+          </div>
+        </FieldGroup>
+      </form>
     </div>
   )
 }

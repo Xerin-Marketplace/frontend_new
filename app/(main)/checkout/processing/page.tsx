@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
   CheckCircle2,
@@ -9,12 +9,11 @@ import {
   Loader2,
   ShoppingBag,
   ArrowRight,
-  type LucideIcon,
 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { api, type ApiError } from "@/lib/api"
+import { api } from "@/lib/api"
 import { toast } from "@/components/ui/toast"
 
 type PaymentStatus = "processing" | "success" | "failed"
@@ -28,13 +27,7 @@ type PaymentResponse = {
   currency: string
 }
 
-function getApiError(err: unknown): string {
-  const e = err as ApiError
-  return e?.detail || "Something went wrong"
-}
-
 export default function PaymentProcessingPage() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const paymentId = searchParams.get("payment_id")
   const orderId = searchParams.get("order_id")

@@ -40,6 +40,10 @@ type AuthContextValue = {
     password: string
   }) => Promise<void>
   registerSeller: (data: Record<string, unknown>) => Promise<void>
+  sendOtp: (phone: string, purpose?: string) => Promise<void>
+  verifyOtp: (phone: string, otpCode: string, purpose?: string) => Promise<void>
+  forgotPassword: (email: string) => Promise<void>
+  resetPassword: (email: string, otpCode: string, newPassword: string) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
@@ -94,6 +98,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   )
 
+  const sendOtp = React.useCallback(
+    async (phone: string, purpose?: string) => {
+      await api.post("/auth/send-otp", { phone, purpose })
+    },
+    []
+  )
+
+  const verifyOtp = React.useCallback(
+    async (phone: string, otpCode: string, purpose?: string) => {
+      await api.post("/auth/verify-otp", { phone, otp_code: otpCode, purpose })
+    },
+    []
+  )
+
+  const forgotPassword = React.useCallback(
+    async (email: string) => {
+      await api.post("/auth/forgot-password", { email })
+    },
+    []
+  )
+
+  const resetPassword = React.useCallback(
+    async (email: string, otpCode: string, newPassword: string) => {
+      await api.post("/auth/reset-password", { email, otp_code: otpCode, new_password: newPassword })
+    },
+    []
+  )
+
   const logout = React.useCallback(async () => {
     const refreshToken = getToken("refresh")
     if (refreshToken) {
@@ -126,10 +158,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       registerSeller,
+      sendOtp,
+      verifyOtp,
+      forgotPassword,
+      resetPassword,
       logout,
       refreshUser,
     }),
-    [user, loading, login, register, registerSeller, logout, refreshUser]
+    [user, loading, login, register, registerSeller, sendOtp, verifyOtp, forgotPassword, resetPassword, logout, refreshUser]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

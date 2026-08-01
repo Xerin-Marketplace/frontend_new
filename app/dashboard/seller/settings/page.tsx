@@ -56,7 +56,8 @@ type NotificationPrefs = {
 
 type UserData = {
   id: string
-  full_name: string
+  first_name: string
+  last_name: string
   email: string
   phone: string
   role: string
@@ -76,7 +77,8 @@ export default function SellerSettingsPage() {
 
   const [account, setAccount] = React.useState<UserData>({
     id: "",
-    full_name: "",
+    first_name: "",
+    last_name: "",
     email: "",
     phone: "",
     role: "Seller",
@@ -97,7 +99,8 @@ export default function SellerSettingsPage() {
       .then((data) => {
         setAccount({
           id: data.id,
-          full_name: data.full_name,
+          first_name: data.first_name ?? "",
+          last_name: data.last_name ?? "",
           email: data.email,
           phone: data.phone,
           role: user?.account_type ?? "Seller",
@@ -125,7 +128,8 @@ export default function SellerSettingsPage() {
     setSaving(true)
     try {
       await api.patch('/users/me', {
-        full_name: account.full_name,
+        first_name: account.first_name,
+        last_name: account.last_name,
         email: account.email,
         phone: account.phone,
       })
@@ -192,21 +196,27 @@ export default function SellerSettingsPage() {
           <FieldGroup>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="full_name">Full Name</FieldLabel>
-                <Input id="full_name" value={account.full_name} onChange={(e) => updateAccount("full_name", e.target.value)} />
+                <FieldLabel htmlFor="first_name">First Name</FieldLabel>
+                <Input id="first_name" value={account.first_name} onChange={(e) => updateAccount("first_name", e.target.value)} />
               </Field>
+              <Field>
+                <FieldLabel htmlFor="last_name">Last Name</FieldLabel>
+                <Input id="last_name" value={account.last_name} onChange={(e) => updateAccount("last_name", e.target.value)} />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="role">Role</FieldLabel>
                 <div className="flex h-9 items-center gap-2">
                   <Badge variant="secondary">{account.role}</Badge>
                 </div>
               </Field>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input id="email" type="email" value={account.email} onChange={(e) => updateAccount("email", e.target.value)} />
               </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="phone">Phone</FieldLabel>
                 <Input id="phone" value={account.phone} onChange={(e) => updateAccount("phone", e.target.value)} />

@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.xerinmarketplace.com/api/v1"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://api.xerinmarketplace.com/api/v1"
 
 type TokenType = "access" | "refresh"
 

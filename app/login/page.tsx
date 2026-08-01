@@ -27,9 +27,15 @@ export default function LoginPage() {
       </div>
 
       {/* Right - Branding */}
-      <div className="relative hidden overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.08),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(255,255,255,0.05),transparent_50%)]" />
+      <div className="relative hidden overflow-hidden lg:flex lg:flex-col lg:justify-between lg:p-12">
+        <img
+          src="/securepayemtbns.jpg"
+          alt="Secure payments"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/40" />
+        <div className="absolute inset-0 mix-blend-multiply bg-primary/20" />
 
         <div className="relative flex flex-col gap-2">
           <div className="flex items-center gap-2 text-white">

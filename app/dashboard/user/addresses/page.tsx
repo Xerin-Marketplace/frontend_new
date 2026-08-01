@@ -4,12 +4,11 @@ import * as React from "react"
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
   DialogContent,
@@ -35,6 +34,12 @@ import {
   Briefcase,
   Star,
 } from "lucide-react"
+import { api, type ApiError } from "@/lib/api"
+
+function getApiError(err: unknown): string {
+  const e = err as ApiError
+  return e?.detail || "Something went wrong. Please try again."
+}
 
 type Address = {
   id: string
@@ -48,52 +53,72 @@ type Address = {
   is_default: boolean
 }
 
-const mockAddresses: Address[] = [
-  { id: "1", label: "Home", recipient_name: "Asha Mwangi", phone: "+255 712 345 678", address_line: "123 Mlimani Street", city: "Dar es Salaam", region: "Dar es Salaam", postal_code: "14110", is_default: true },
-  { id: "2", label: "Office", recipient_name: "Asha Mwangi", phone: "+255 712 345 678", address_line: "45 Ohio Street, 5th Floor", city: "Dar es Salaam", region: "Dar es Salaam", postal_code: "14110", is_default: false },
-  { id: "3", label: "Mom's Place", recipient_name: "Grace Mwangi", phone: "+255 722 111 222", address_line: "78 Kijenge Area", city: "Arusha", region: "Arusha", postal_code: "23100", is_default: false },
-]
-
 const labelIcons: Record<string, React.ReactNode> = {
   Home: <Home className="size-4" />,
   Office: <Briefcase className="size-4" />,
 }
 
 export default function UserAddressesPage() {
-  const [addresses, setAddresses] = React.useState<Address[]>(mockAddresses)
+  const [addresses, setAddresses] = React.useState<Address[]>([])
+  const [loading, setLoading] = React.useState(true)
   const [addOpen, setAddOpen] = React.useState(false)
   const [editAddr, setEditAddr] = React.useState<Address | null>(null)
   const [deleteAddr, setDeleteAddr] = React.useState<Address | null>(null)
+  const [saving, setSaving] = React.useState(false)
 
-  const handleSave = (data: Omit<Address, "id">, id?: string) => {
-    if (id) {
-      setAddresses((prev) => prev.map((a) => a.id === id ? { ...a, ...data } : a))
-      if (data.is_default) {
-        setAddresses((prev) => prev.map((a) => a.id !== id ? { ...a, is_default: false } : a))
-      }
-      setEditAddr(null)
-      toast.add({ title: "Address updated!", description: `${data.label} has been updated.`, type: "success" })
-    } else {
-      const newAddr = { ...data, id: crypto.randomUUID() }
-      if (data.is_default) {
-        setAddresses((prev) => [...prev.map((a) => ({ ...a, is_default: false })), newAddr])
+  const fetchAddresses = React.useCallback(() => {
+    setLoading(true)
+    api.get<Address[]>("/addresses")
+      .then(setAddresses)
+      .catch((err) => {
+        toast.add({ title: "Failed to load addresses", description: getApiError(err), type: "error" })
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  React.useEffect(() => {
+    fetchAddresses()
+  }, [fetchAddresses])
+
+  const handleSave = async (data: Omit<Address, "id">, id?: string) => {
+    setSaving(true)
+    try {
+      if (id) {
+        await api.patch(`/addresses/${id}`, data)
+        toast.add({ title: "Address updated!", description: `${data.label} has been updated.`, type: "success" })
+        setEditAddr(null)
       } else {
-        setAddresses((prev) => [...prev, newAddr])
+        await api.post("/addresses", data)
+        toast.add({ title: "Address added!", description: `${data.label} has been saved.`, type: "success" })
+        setAddOpen(false)
       }
-      setAddOpen(false)
-      toast.add({ title: "Address added!", description: `${data.label} has been saved.`, type: "success" })
+      fetchAddresses()
+    } catch (err) {
+      toast.add({ title: "Failed to save", description: getApiError(err), type: "error" })
+    } finally {
+      setSaving(false)
     }
   }
 
-  const handleDelete = (id: string) => {
-    setAddresses((prev) => prev.filter((a) => a.id !== id))
-    setDeleteAddr(null)
-    toast.add({ title: "Address deleted", description: "The address has been removed.", type: "success" })
+  const handleDelete = async (id: string) => {
+    try {
+      await api.delete(`/addresses/${id}`)
+      toast.add({ title: "Address deleted", description: "The address has been removed.", type: "success" })
+      setDeleteAddr(null)
+      fetchAddresses()
+    } catch (err) {
+      toast.add({ title: "Failed to delete", description: getApiError(err), type: "error" })
+    }
   }
 
-  const handleSetDefault = (id: string) => {
-    setAddresses((prev) => prev.map((a) => ({ ...a, is_default: a.id === id })))
-    toast.add({ title: "Default address set", description: "Your default shipping address has been updated.", type: "success" })
+  const handleSetDefault = async (id: string) => {
+    try {
+      await api.patch(`/addresses/${id}`, { is_default: true })
+      toast.add({ title: "Default address set", description: "Your default shipping address has been updated.", type: "success" })
+      fetchAddresses()
+    } catch (err) {
+      toast.add({ title: "Failed to set default", description: getApiError(err), type: "error" })
+    }
   }
 
   return (
@@ -106,57 +131,67 @@ export default function UserAddressesPage() {
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger render={<Button><Plus className="size-4" /> Add Address</Button>} />
           <DialogContent className="sm:max-w-[480px]">
-            <AddressForm onSubmit={(data) => handleSave(data)} />
+            <AddressForm onSubmit={(data) => handleSave(data)} saving={saving} />
           </DialogContent>
         </Dialog>
       </div>
 
       {/* Address Cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {addresses.map((addr) => (
-          <Card key={addr.id} className={addr.is_default ? "border-primary" : ""}>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex size-9 items-center justify-center rounded-md bg-muted">
-                    {labelIcons[addr.label] ?? <MapPin className="size-4 text-muted-foreground" />}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{addr.label}</span>
-                      {addr.is_default && <Badge variant="default" className="text-xs">Default</Badge>}
+      {loading ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : addresses.length === 0 ? (
+        <Card><CardContent className="py-12 text-center text-muted-foreground">No addresses saved yet. Add one for faster checkout.</CardContent></Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {addresses.map((addr) => (
+            <Card key={addr.id} className={addr.is_default ? "border-primary" : ""}>
+              <CardContent className="pt-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-9 items-center justify-center rounded-md bg-muted">
+                      {labelIcons[addr.label] ?? <MapPin className="size-4 text-muted-foreground" />}
                     </div>
-                    <div className="text-xs text-muted-foreground">{addr.recipient_name}</div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{addr.label}</span>
+                        {addr.is_default && <Badge variant="default" className="text-xs">Default</Badge>}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{addr.recipient_name}</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon-sm" onClick={() => setEditAddr(addr)}>
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" onClick={() => setDeleteAddr(addr)} className="text-red-500">
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon-sm" onClick={() => setEditAddr(addr)}>
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon-sm" onClick={() => setDeleteAddr(addr)} className="text-red-500">
-                    <Trash2 className="size-4" />
-                  </Button>
+                <div className="mt-4 space-y-1 text-sm text-muted-foreground">
+                  <div>{addr.address_line}</div>
+                  <div>{addr.city}, {addr.region} {addr.postal_code}</div>
+                  <div className="font-medium text-foreground">{addr.phone}</div>
                 </div>
-              </div>
-              <div className="mt-4 space-y-1 text-sm text-muted-foreground">
-                <div>{addr.address_line}</div>
-                <div>{addr.city}, {addr.region} {addr.postal_code}</div>
-                <div className="font-medium text-foreground">{addr.phone}</div>
-              </div>
-              {!addr.is_default && (
-                <Button variant="outline" size="sm" className="mt-4" onClick={() => handleSetDefault(addr.id)}>
-                  <Star className="size-3" /> Set as Default
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                {!addr.is_default && (
+                  <Button variant="outline" size="sm" className="mt-4" onClick={() => handleSetDefault(addr.id)}>
+                    <Star className="size-3" /> Set as Default
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Edit Dialog */}
       <Dialog open={!!editAddr} onOpenChange={(open) => !open && setEditAddr(null)}>
         <DialogContent className="sm:max-w-[480px]">
-          {editAddr && <AddressForm address={editAddr} onSubmit={(data) => handleSave(data, editAddr.id)} />}
+          {editAddr && <AddressForm address={editAddr} onSubmit={(data) => handleSave(data, editAddr.id)} saving={saving} />}
         </DialogContent>
       </Dialog>
 
@@ -182,9 +217,11 @@ export default function UserAddressesPage() {
 function AddressForm({
   address,
   onSubmit,
+  saving,
 }: {
   address?: Address
   onSubmit: (data: Omit<Address, "id">) => void
+  saving?: boolean
 }) {
   const [label, setLabel] = React.useState(address?.label ?? "")
   const [recipientName, setRecipientName] = React.useState(address?.recipient_name ?? "")
@@ -258,7 +295,7 @@ function AddressForm({
       </FieldGroup>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-        <Button type="submit">{address ? "Save Changes" : "Add Address"}</Button>
+        <Button type="submit" disabled={saving}>{saving ? "Saving..." : address ? "Save Changes" : "Add Address"}</Button>
       </DialogFooter>
     </form>
   )

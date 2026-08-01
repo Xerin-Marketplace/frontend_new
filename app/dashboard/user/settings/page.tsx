@@ -25,6 +25,7 @@ import {
   FieldLabel,
   FieldDescription,
 } from "@/components/ui/field"
+import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/toast"
 import {
   User,
@@ -39,30 +40,78 @@ import {
   Tag,
   AlertTriangle,
 } from "lucide-react"
+import { api, type ApiError } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 
-type NotificationPrefs = {
-  order_updates: boolean
-  promotions: boolean
-  price_drops: boolean
-  seller_messages: boolean
-  newsletter: boolean
-  new_arrivals: boolean
+function getApiError(err: unknown): string {
+  const e = err as ApiError
+  return e?.detail || "Something went wrong. Please try again."
+}
+
+type UserProfile = {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  date_of_birth: string | null
+  gender: string | null
+  account_type: string
 }
 
 export default function UserSettingsPage() {
+  const { refreshUser } = useAuth()
   const [saving, setSaving] = React.useState(false)
+  const [loading, setLoading] = React.useState(true)
   const [passwordOpen, setPasswordOpen] = React.useState(false)
   const [deleteOpen, setDeleteOpen] = React.useState(false)
+  const [profile, setProfile] = React.useState<UserProfile | null>(null)
 
-  const [profile, setProfile] = React.useState({
-    full_name: "Asha Mwangi",
-    email: "asha.mwangi@gmail.com",
-    phone: "+255 712 345 678",
-    date_of_birth: "1995-03-15",
-    gender: "female",
-  })
+  React.useEffect(() => {
+    api.get<UserProfile>("/users/me")
+      .then(setProfile)
+      .catch((err) => {
+        toast.add({ title: "Failed to load profile", description: getApiError(err), type: "error" })
+      })
+      .finally(() => setLoading(false))
+  }, [])
 
-  const [prefs, setPrefs] = React.useState<NotificationPrefs>({
+  const updateProfile = (field: string, value: string) => {
+    setProfile((prev) => prev ? { ...prev, [field]: value } : prev)
+  }
+
+  const handleSaveProfile = async () => {
+    if (!profile) return
+    setSaving(true)
+    try {
+      await api.patch("/users/me", {
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        email: profile.email,
+        phone: profile.phone,
+        date_of_birth: profile.date_of_birth,
+        gender: profile.gender,
+      })
+      toast.add({ title: "Profile saved!", description: "Your profile has been updated.", type: "success" })
+      refreshUser()
+    } catch (err) {
+      toast.add({ title: "Failed to save", description: getApiError(err), type: "error" })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleChangePassword = async (current: string, newPwd: string) => {
+    try {
+      await api.post("/auth/change-password", { current_password: current, new_password: newPwd })
+      setPasswordOpen(false)
+      toast.add({ title: "Password changed!", description: "Your password has been updated.", type: "success" })
+    } catch (err) {
+      toast.add({ title: "Failed to change password", description: getApiError(err), type: "error" })
+    }
+  }
+
+  const [prefs, setPrefs] = React.useState<Record<string, boolean>>({
     order_updates: true,
     promotions: true,
     price_drops: false,
@@ -71,32 +120,11 @@ export default function UserSettingsPage() {
     new_arrivals: true,
   })
 
-  const updateProfile = (field: string, value: string) => {
-    setProfile((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const togglePref = (key: keyof NotificationPrefs) => {
+  const togglePref = (key: string) => {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
-  const handleSaveProfile = () => {
-    setSaving(true)
-    setTimeout(() => {
-      setSaving(false)
-      toast.add({ title: "Profile saved!", description: "Your profile has been updated.", type: "success" })
-    }, 800)
-  }
-
-  const handleSavePrefs = () => {
-    toast.add({ title: "Preferences saved!", description: "Notification settings updated.", type: "success" })
-  }
-
-  const handleChangePassword = () => {
-    setPasswordOpen(false)
-    toast.add({ title: "Password changed!", description: "Your password has been updated.", type: "success" })
-  }
-
-  const notificationItems: { key: keyof NotificationPrefs; label: string; desc: string; icon: React.ReactNode }[] = [
+  const notificationItems: { key: string; label: string; desc: string; icon: React.ReactNode }[] = [
     { key: "order_updates", label: "Order Updates", desc: "Notifications about your order status", icon: <Package className="size-4" /> },
     { key: "promotions", label: "Promotions & Deals", desc: "Special offers and discount notifications", icon: <Tag className="size-4" /> },
     { key: "price_drops", label: "Price Drop Alerts", desc: "Get notified when wishlist items go on sale", icon: <Bell className="size-4" /> },
@@ -120,39 +148,56 @@ export default function UserSettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {loading ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : profile ? (
           <FieldGroup>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="full_name">Full Name</FieldLabel>
-                <Input id="full_name" value={profile.full_name} onChange={(e) => updateProfile("full_name", e.target.value)} />
+                <FieldLabel htmlFor="first_name">First Name</FieldLabel>
+                <Input id="first_name" value={profile.first_name ?? ""} onChange={(e) => updateProfile("first_name", e.target.value)} />
               </Field>
               <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input id="email" type="email" value={profile.email} onChange={(e) => updateProfile("email", e.target.value)} />
+                <FieldLabel htmlFor="last_name">Last Name</FieldLabel>
+                <Input id="last_name" value={profile.last_name ?? ""} onChange={(e) => updateProfile("last_name", e.target.value)} />
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="phone">Phone</FieldLabel>
-                <Input id="phone" value={profile.phone} onChange={(e) => updateProfile("phone", e.target.value)} />
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input id="email" type="email" value={profile.email ?? ""} onChange={(e) => updateProfile("email", e.target.value)} />
               </Field>
               <Field>
-                <FieldLabel htmlFor="dob">Date of Birth</FieldLabel>
-                <Input id="dob" type="date" value={profile.date_of_birth} onChange={(e) => updateProfile("date_of_birth", e.target.value)} />
+                <FieldLabel htmlFor="phone">Phone</FieldLabel>
+                <Input id="phone" value={profile.phone ?? ""} onChange={(e) => updateProfile("phone", e.target.value)} />
               </Field>
             </div>
-            <Field>
-              <FieldLabel htmlFor="gender">Gender</FieldLabel>
-              <select id="gender" value={profile.gender} onChange={(e) => updateProfile("gender", e.target.value)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring">
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-                <option value="prefer_not_to_say">Prefer not to say</option>
-              </select>
-            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="dob">Date of Birth</FieldLabel>
+                <Input id="dob" type="date" value={profile.date_of_birth ?? ""} onChange={(e) => updateProfile("date_of_birth", e.target.value)} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="gender">Gender</FieldLabel>
+                <select id="gender" value={profile.gender ?? ""} onChange={(e) => updateProfile("gender", e.target.value)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Prefer not to say</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </Field>
+            </div>
           </FieldGroup>
+          ) : (
+            <p className="text-sm text-muted-foreground">Failed to load profile.</p>
+          )}
           <div className="mt-4 flex justify-end">
-            <Button onClick={handleSaveProfile} disabled={saving}>
+            <Button onClick={handleSaveProfile} disabled={saving || !profile}>
               <Save className="size-4" />
               {saving ? "Saving..." : "Save Profile"}
             </Button>
@@ -167,7 +212,7 @@ export default function UserSettingsPage() {
             <CardTitle className="text-base flex items-center gap-2">
               <Bell className="size-4" /> Notification Preferences
             </CardTitle>
-            <Button variant="outline" size="sm" onClick={handleSavePrefs}>
+            <Button variant="outline" size="sm" onClick={() => toast.add({ title: "Preferences saved!", description: "Notification settings updated.", type: "success" })}>
               <Save className="size-4" /> Save
             </Button>
           </div>
@@ -213,7 +258,7 @@ export default function UserSettingsPage() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Password</div>
-                  <div className="text-xs text-muted-foreground">Last changed 2 months ago</div>
+                  <div className="text-xs text-muted-foreground">Change your account password</div>
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => setPasswordOpen(true)}>
@@ -287,16 +332,19 @@ export default function UserSettingsPage() {
 function PasswordForm({
   onSubmit,
 }: {
-  onSubmit: () => void
+  onSubmit: (current: string, newPwd: string) => void
 }) {
   const [current, setCurrent] = React.useState("")
   const [newPwd, setNewPwd] = React.useState("")
   const [confirm, setConfirm] = React.useState("")
+  const [saving, setSaving] = React.useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!current || !newPwd || newPwd !== confirm) return
-    onSubmit()
+    setSaving(true)
+    await onSubmit(current, newPwd)
+    setSaving(false)
   }
 
   return (
@@ -325,7 +373,7 @@ function PasswordForm({
       </FieldGroup>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-        <Button type="submit">Update Password</Button>
+        <Button type="submit" disabled={saving}>{saving ? "Updating..." : "Update Password"}</Button>
       </DialogFooter>
     </form>
   )

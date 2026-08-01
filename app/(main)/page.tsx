@@ -1,26 +1,54 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   ArrowRight,
   SlidersHorizontal,
   X,
+  Package,
 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ProductCard } from "@/components/product-card"
-import { categories, products, dealsProducts } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
-import * as Icons from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { api, type ApiError } from "@/lib/api"
+import { toast } from "@/components/ui/toast"
+import type { ApiProduct, ApiCategory } from "@/lib/store-types"
+
+function getApiError(err: unknown): string {
+  const e = err as ApiError
+  return e?.detail || "Something went wrong. Please try again."
+}
 
 export default function Home() {
   const [activeCat, setActiveCat] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [products, setProducts] = useState<ApiProduct[]>([])
+  const [categories, setCategories] = useState<ApiCategory[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      api.get<ApiProduct[]>("/products?limit=20"),
+      api.get<ApiCategory[]>("/products/categories"),
+    ])
+      .then(([p, c]) => {
+        setProducts(p)
+        setCategories(c)
+      })
+      .catch((err) => {
+        toast.add({ title: "Failed to load data", description: getApiError(err), type: "error" })
+      })
+      .finally(() => setLoading(false))
+  }, [])
 
   const filtered = activeCat
-    ? products.filter((p) => p.category === activeCat)
+    ? products.filter((p) => p.category_id === activeCat)
     : products
+
+  const dealsProducts = products.filter((p) => p.sale_price && Number(p.sale_price) < Number(p.price)).slice(0, 4)
 
   return (
     <div className="flex flex-col">
@@ -44,34 +72,40 @@ export default function Home() {
               )}
             >
               <span>All Products</span>
-              <span className="text-xs opacity-70">{products.length}</span>
+              <span className="text-xs opacity-70">{loading ? "..." : products.length}</span>
             </button>
-            {categories.map((cat) => {
-              const Icon = (Icons as any)[cat.icon] || Icons.Package
-              const isActive = activeCat === cat.name
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCat(isActive ? null : cat.name)}
-                  className={cn(
-                    "flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-muted"
-                  )}
-                >
-                  <span className="flex items-center gap-2.5">
-                    <Icon className="size-4" />
-                    {cat.name}
-                  </span>
-                  <span className="text-xs opacity-70">{cat.productCount}</span>
-                </button>
-              )
-            })}
+            {loading ? (
+              <div className="flex flex-col gap-1">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-9 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : (
+              categories.map((cat) => {
+                const isActive = activeCat === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setActiveCat(isActive ? null : cat.id)}
+                    className={cn(
+                      "flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors",
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-muted"
+                    )}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Package className="size-4" />
+                      {cat.name}
+                    </span>
+                  </button>
+                )
+              })
+            )}
 
             {/* Deals link */}
             <Link
-              href="/deals"
+              href="/products?deals=true"
               className="mt-3 flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
             >
               🔥 Hot Deals
@@ -123,30 +157,26 @@ export default function Home() {
                 <span>All Products</span>
                 <span className="text-xs opacity-70">{products.length}</span>
               </button>
-              {categories.map((cat) => {
-                const Icon = (Icons as any)[cat.icon] || Icons.Package
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => {
-                      setActiveCat(cat.name)
-                      setSidebarOpen(false)
-                    }}
-                    className={cn(
-                      "mb-1 flex w-full items-center justify-between rounded-lg px-3 py-3 text-sm transition-colors",
-                      activeCat === cat.name
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted"
-                    )}
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Icon className="size-4" />
-                      {cat.name}
-                    </span>
-                    <span className="text-xs opacity-70">{cat.productCount}</span>
-                  </button>
-                )
-              })}
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    setActiveCat(cat.id)
+                    setSidebarOpen(false)
+                  }}
+                  className={cn(
+                    "mb-1 flex w-full items-center justify-between rounded-lg px-3 py-3 text-sm transition-colors",
+                    activeCat === cat.id
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted"
+                  )}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Package className="size-4" />
+                    {cat.name}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -157,10 +187,10 @@ export default function Home() {
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h1 className="text-xl font-bold tracking-tight md:text-2xl">
-                {activeCat || "All Products"}
+                {activeCat ? categories.find((c) => c.id === activeCat)?.name ?? "Products" : "All Products"}
               </h1>
               <p className="text-sm text-muted-foreground">
-                {filtered.length} products available
+                {loading ? "Loading..." : `${filtered.length} products available`}
               </p>
             </div>
             <select
@@ -170,16 +200,32 @@ export default function Home() {
               <option value="featured">Featured</option>
               <option value="price-low">Price: Low to High</option>
               <option value="price-high">Price: High to Low</option>
-              <option value="rating">Top Rated</option>
             </select>
           </div>
 
           {/* Products grid */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-4">
-            {filtered.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex flex-col gap-2">
+                  <Skeleton className="aspect-square w-full rounded-lg" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+              No products found.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-4">
+              {filtered.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          )}
 
           {/* Deals banner */}
           <div className="mt-8 relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary/80 p-5 md:p-8">
@@ -194,7 +240,7 @@ export default function Home() {
                 Save big on selected items. Hurry, these deals won&apos;t last long!
               </p>
               <Link
-                href="/deals"
+                href="/products?deals=true"
                 className={cn(
                   buttonVariants({ variant: "secondary", size: "lg" }),
                   "gap-2"
@@ -207,22 +253,24 @@ export default function Home() {
           </div>
 
           {/* Deals products */}
-          <div className="mt-8">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-bold tracking-tight">Today&apos;s Deals</h2>
-              <Link
-                href="/deals"
-                className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-              >
-                View All <ArrowRight className="size-4" />
-              </Link>
+          {dealsProducts.length > 0 && (
+            <div className="mt-8">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-xl font-bold tracking-tight">Today&apos;s Deals</h2>
+                <Link
+                  href="/products?deals=true"
+                  className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                >
+                  View All <ArrowRight className="size-4" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-4">
+                {dealsProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-4">
-              {dealsProducts.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

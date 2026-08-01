@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -19,14 +20,53 @@ import {
   Tag,
   Headphones,
   Truck,
+  LogOut,
+  Settings,
+  LayoutDashboard,
+  Store,
 } from "lucide-react"
-import { categories } from "@/lib/mock-data"
+import { categories as mockCategories } from "@/lib/mock-data"
 import * as Icons from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api"
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [cartCount, setCartCount] = useState(0)
+  const profileRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
+  const { user, isAuthenticated, logout } = useAuth()
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.get<{ items: { id: string; quantity: number }[] }>("/cart")
+        .then((data) => {
+          setCartCount(data.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
+        })
+        .catch(() => {})
+    }
+  }, [isAuthenticated])
+
+  const handleLogout = async () => {
+    await logout()
+    setProfileOpen(false)
+    router.push("/")
+  }
+
+  const userInitials = user ? `${user.first_name?.[0] ?? ""}${user.last_name?.[0] ?? ""}`.toUpperCase() : ""
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -110,22 +150,98 @@ export function Header() {
             className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "relative shrink-0")}
           >
             <ShoppingCart className="size-5" />
-            <Badge className="absolute -right-0.5 -top-0.5 size-4 justify-center p-0 text-[10px]">
-              2
-            </Badge>
+            {cartCount > 0 && (
+              <Badge className="absolute -right-0.5 -top-0.5 size-4 justify-center p-0 text-[10px]">
+                {cartCount}
+              </Badge>
+            )}
           </Link>
-          <Link
-            href="/auth"
-            className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "hidden md:flex")}
-          >
-            <User className="size-5" />
-          </Link>
-          <Link
-            href="/auth"
-            className={cn(buttonVariants({ size: "sm" }), "hidden md:flex")}
-          >
-            Sign In
-          </Link>
+          {isAuthenticated && user ? (
+            <div className="relative" ref={profileRef}>
+              <button
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="flex items-center gap-2 rounded-full p-0.5 transition-colors hover:bg-muted"
+              >
+                <div className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {userInitials || <User className="size-4" />}
+                </div>
+              </button>
+              {profileOpen && (
+                <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border bg-background shadow-lg z-50">
+                  <div className="flex items-center gap-3 border-b p-4">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                      {userInitials || <User className="size-5" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{user.first_name} {user.last_name}</p>
+                      <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col p-2">
+                    {user.is_seller && (
+                      <Link
+                        href="/dashboard/seller"
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-muted"
+                      >
+                        <Store className="size-4 text-muted-foreground" />
+                        Seller Dashboard
+                      </Link>
+                    )}
+                    {(user.account_type === "admin" || user.account_type === "super_admin") && (
+                      <Link
+                        href="/dashboard/admin"
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-muted"
+                      >
+                        <LayoutDashboard className="size-4 text-muted-foreground" />
+                        Admin Panel
+                      </Link>
+                    )}
+                    <Link
+                      href="/dashboard/user"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-muted"
+                    >
+                      <Package className="size-4 text-muted-foreground" />
+                      My Dashboard
+                    </Link>
+                    <Link
+                      href="/dashboard/user/settings"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-muted"
+                    >
+                      <Settings className="size-4 text-muted-foreground" />
+                      Settings
+                    </Link>
+                    <div className="my-1 h-px bg-border" />
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-500 hover:bg-red-50"
+                    >
+                      <LogOut className="size-4" />
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <Link
+                href="/auth"
+                className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "hidden md:flex")}
+              >
+                <User className="size-5" />
+              </Link>
+              <Link
+                href="/auth"
+                className={cn(buttonVariants({ size: "sm" }), "hidden md:flex")}
+              >
+                Sign In
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -138,7 +254,7 @@ export function Header() {
           >
             <Menu className="size-4" /> All Categories
           </Link>
-          {categories.slice(0, 7).map((cat) => (
+          {mockCategories.slice(0, 7).map((cat) => (
             <Link
               key={cat.id}
               href={`/products?category=${cat.id}`}
@@ -226,7 +342,7 @@ export function Header() {
               <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Categories
               </p>
-              {categories.map((cat) => {
+              {mockCategories.map((cat) => {
                 const Icon = (Icons as any)[cat.icon] || Icons.Package
                 return (
                   <Link
@@ -256,26 +372,76 @@ export function Header() {
               <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Account
               </p>
-              <Link
-                href="/auth"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
-              >
-                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <User className="size-4.5" />
-                </div>
-                Sign In / Register
-              </Link>
-              <Link
-                href="/auth?tab=seller"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
-              >
-                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <TrendingUp className="size-4.5" />
-                </div>
-                Become a Seller
-              </Link>
+              {isAuthenticated && user ? (
+                <>
+                  <Link
+                    href="/dashboard/user"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
+                  >
+                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <User className="size-4.5" />
+                    </div>
+                    My Dashboard
+                  </Link>
+                  {user.is_seller && (
+                    <Link
+                      href="/dashboard/seller"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
+                    >
+                      <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Store className="size-4.5" />
+                      </div>
+                      Seller Dashboard
+                    </Link>
+                  )}
+                  {(user.account_type === "admin" || user.account_type === "super_admin") && (
+                    <Link
+                      href="/dashboard/admin"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
+                    >
+                      <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <LayoutDashboard className="size-4.5" />
+                      </div>
+                      Admin Panel
+                    </Link>
+                  )}
+                  <button
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50 active:scale-[0.98]"
+                  >
+                    <div className="flex size-9 items-center justify-center rounded-lg bg-red-50 text-red-500">
+                      <LogOut className="size-4.5" />
+                    </div>
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/auth"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
+                  >
+                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <User className="size-4.5" />
+                    </div>
+                    Sign In / Register
+                  </Link>
+                  <Link
+                    href="/auth?tab=seller"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
+                  >
+                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <TrendingUp className="size-4.5" />
+                    </div>
+                    Become a Seller
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -335,7 +501,7 @@ export function Header() {
                 Trending Categories
               </p>
               <div className="flex flex-col gap-1">
-                {categories.slice(0, 4).map((cat) => {
+                {mockCategories.slice(0, 4).map((cat) => {
                   const Icon = (Icons as any)[cat.icon] || Icons.Package
                   return (
                     <Link

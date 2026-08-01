@@ -7,18 +7,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogClose,
-} from "@/components/ui/dialog"
 import {
   Field,
   FieldGroup,
@@ -27,12 +18,11 @@ import {
 } from "@/components/ui/field"
 import { toast } from "@/components/ui/toast"
 import {
-  User,
-  Bell,
+  Settings,
   Shield,
   Lock,
   Save,
-  Trash2,
+  Bell,
   Mail,
   MessageSquare,
   Package,
@@ -43,16 +33,15 @@ import { api, type ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
-
-type NotificationPrefs = {
-  new_orders: boolean
-  order_updates: boolean
-  low_stock: boolean
-  payout_updates: boolean
-  product_reviews: boolean
-  customer_messages: boolean
-  marketing_tips: boolean
-}
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog"
 
 type UserData = {
   id: string
@@ -62,53 +51,58 @@ type UserData = {
   role: string
 }
 
+type NotificationPrefs = {
+  new_users: boolean
+  seller_applications: boolean
+  product_approvals: boolean
+  refund_requests: boolean
+  payout_requests: boolean
+  security_alerts: boolean
+  system_updates: boolean
+}
+
 function getApiError(err: unknown): string {
   const e = err as ApiError
   return e?.detail || "Something went wrong. Please try again."
 }
 
-export default function SellerSettingsPage() {
+export default function AdminSettingsPage() {
   const { user } = useAuth()
   const [saving, setSaving] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [passwordOpen, setPasswordOpen] = React.useState(false)
-  const [deleteOpen, setDeleteOpen] = React.useState(false)
 
   const [account, setAccount] = React.useState<UserData>({
     id: "",
     full_name: "",
     email: "",
     phone: "",
-    role: "Seller",
+    role: "Admin",
   })
 
   const [prefs, setPrefs] = React.useState<NotificationPrefs>({
-    new_orders: true,
-    order_updates: true,
-    low_stock: true,
-    payout_updates: true,
-    product_reviews: false,
-    customer_messages: true,
-    marketing_tips: false,
+    new_users: true,
+    seller_applications: true,
+    product_approvals: true,
+    refund_requests: true,
+    payout_requests: true,
+    security_alerts: true,
+    system_updates: false,
   })
 
   React.useEffect(() => {
-    api.get<UserData & { role: string }>('/users/me')
+    api.get<UserData & { first_name: string; last_name: string }>("/users/me")
       .then((data) => {
         setAccount({
           id: data.id,
-          full_name: data.full_name,
+          full_name: `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim(),
           email: data.email,
-          phone: data.phone,
-          role: user?.account_type ?? "Seller",
+          phone: data.phone ?? "",
+          role: user?.account_type ?? "Admin",
         })
       })
       .catch((err) => {
-        toast.add({
-          title: "Failed to load profile",
-          description: getApiError(err),
-          type: "error",
-        })
+        toast.add({ title: "Failed to load profile", description: getApiError(err), type: "error" })
       })
       .finally(() => setLoading(false))
   }, [user])
@@ -124,12 +118,15 @@ export default function SellerSettingsPage() {
   const handleSaveAccount = async () => {
     setSaving(true)
     try {
-      await api.patch('/users/me', {
-        full_name: account.full_name,
+      const [firstName, ...rest] = account.full_name.split(" ")
+      const lastName = rest.join(" ")
+      await api.patch("/users/me", {
+        first_name: firstName,
+        last_name: lastName,
         email: account.email,
         phone: account.phone,
       })
-      toast.add({ title: "Account saved!", description: "Your account information has been updated.", type: "success" })
+      toast.add({ title: "Account saved!", description: "Your admin profile has been updated.", type: "success" })
     } catch (err) {
       toast.add({ title: "Failed to save", description: getApiError(err), type: "error" })
     } finally {
@@ -142,8 +139,12 @@ export default function SellerSettingsPage() {
   }
 
   const handleChangePassword = async (data: { current: string; new: string; confirm: string }) => {
+    if (data.new !== data.confirm) {
+      toast.add({ title: "Passwords don't match", description: "New password and confirmation must match.", type: "error" })
+      return
+    }
     try {
-      await api.post('/auth/change-password', {
+      await api.post("/auth/change-password", {
         current_password: data.current,
         new_password: data.new,
       })
@@ -165,27 +166,27 @@ export default function SellerSettingsPage() {
   }
 
   const notificationItems: { key: keyof NotificationPrefs; label: string; desc: string; icon: React.ReactNode }[] = [
-    { key: "new_orders", label: "New Orders", desc: "Get notified when you receive a new order", icon: <Package className="size-4" /> },
-    { key: "order_updates", label: "Order Updates", desc: "Notifications about order status changes", icon: <Bell className="size-4" /> },
-    { key: "low_stock", label: "Low Stock Alerts", desc: "Alert when products are running low", icon: <AlertTriangle className="size-4" /> },
-    { key: "payout_updates", label: "Payout Updates", desc: "Notifications about payout status", icon: <DollarSign className="size-4" /> },
-    { key: "product_reviews", label: "Product Reviews", desc: "Get notified when products get reviews", icon: <MessageSquare className="size-4" /> },
-    { key: "customer_messages", label: "Customer Messages", desc: "Notifications for customer inquiries", icon: <Mail className="size-4" /> },
-    { key: "marketing_tips", label: "Marketing Tips", desc: "Tips and best practices for selling", icon: <Bell className="size-4" /> },
+    { key: "new_users", label: "New User Registrations", desc: "Get notified when new users sign up", icon: <Settings className="size-4" /> },
+    { key: "seller_applications", label: "Seller Applications", desc: "Notifications for pending seller approvals", icon: <Package className="size-4" /> },
+    { key: "product_approvals", label: "Product Approvals", desc: "Alerts for products awaiting review", icon: <Package className="size-4" /> },
+    { key: "refund_requests", label: "Refund Requests", desc: "Notifications for new refund requests", icon: <AlertTriangle className="size-4" /> },
+    { key: "payout_requests", label: "Payout Requests", desc: "Alerts for pending payout requests", icon: <DollarSign className="size-4" /> },
+    { key: "security_alerts", label: "Security Alerts", desc: "Critical security events and alerts", icon: <Shield className="size-4" /> },
+    { key: "system_updates", label: "System Updates", desc: "Platform maintenance and update notifications", icon: <Bell className="size-4" /> },
   ]
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
-        <p className="text-sm text-muted-foreground">Manage your account, notifications, and security settings.</p>
+        <p className="text-sm text-muted-foreground">Manage your admin account and platform preferences.</p>
       </div>
 
       {/* Account Info */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <User className="size-4" /> Account Information
+            <Settings className="size-4" /> Account Information
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -197,9 +198,7 @@ export default function SellerSettingsPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="role">Role</FieldLabel>
-                <div className="flex h-9 items-center gap-2">
-                  <Badge variant="secondary">{account.role}</Badge>
-                </div>
+                <Input id="role" value={account.role} disabled className="bg-muted" />
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -209,16 +208,16 @@ export default function SellerSettingsPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="phone">Phone</FieldLabel>
-                <Input id="phone" value={account.phone} onChange={(e) => updateAccount("phone", e.target.value)} />
+                <Input id="phone" value={account.phone} onChange={(e) => updateAccount("phone", e.target.value)} placeholder="+255..." />
               </Field>
             </div>
+            <div className="flex justify-end">
+              <Button onClick={handleSaveAccount} disabled={saving}>
+                <Save className="size-4" />
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
           </FieldGroup>
-          <div className="mt-4 flex justify-end">
-            <Button onClick={handleSaveAccount} disabled={saving}>
-              <Save className="size-4" />
-              {saving ? "Saving..." : "Save Account"}
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
@@ -249,9 +248,15 @@ export default function SellerSettingsPage() {
                 </div>
                 <button
                   onClick={() => togglePref(item.key)}
-                  className={`relative h-6 w-11 rounded-full transition-colors ${prefs[item.key] ? "bg-primary" : "bg-muted"}`}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    prefs[item.key] ? "bg-primary" : "bg-muted"
+                  }`}
                 >
-                  <span className={`absolute top-0.5 size-5 rounded-full bg-background shadow transition-transform ${prefs[item.key] ? "translate-x-5" : "translate-x-0.5"}`} />
+                  <span
+                    className={`absolute top-0.5 size-5 rounded-full bg-background shadow transition-transform ${
+                      prefs[item.key] ? "translate-x-5" : "translate-x-0.5"
+                    }`}
+                  />
                 </button>
               </div>
             ))}
@@ -267,19 +272,19 @@ export default function SellerSettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between rounded-lg border p-4">
               <div className="flex items-center gap-3">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
                   <Lock className="size-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium">Password</div>
-                  <div className="text-xs text-muted-foreground">Last changed 3 months ago</div>
+                  <div className="text-sm font-medium">Change Password</div>
+                  <div className="text-xs text-muted-foreground">Update your password regularly for security</div>
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => setPasswordOpen(true)}>
-                Change Password
+                Change
               </Button>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-4">
@@ -288,43 +293,12 @@ export default function SellerSettingsPage() {
                   <Shield className="size-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium">Two-Factor Authentication</div>
-                  <div className="text-xs text-muted-foreground">Add an extra layer of security</div>
+                  <div className="text-sm font-medium">Account Status</div>
+                  <div className="text-xs text-muted-foreground">Your account security status</div>
                 </div>
               </div>
-              <Button variant="outline" size="sm">
-                Enable 2FA
-              </Button>
+              <Badge variant="default">Secure</Badge>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Danger Zone */}
-      <Card className="border-red-200">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2 text-red-600">
-            <AlertTriangle className="size-4" /> Danger Zone
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-4">
-            <div>
-              <div className="text-sm font-medium text-red-700">Deactivate Store</div>
-              <div className="text-xs text-red-600">Temporarily disable your store. You can reactivate anytime.</div>
-            </div>
-            <Button variant="outline" size="sm" className="border-red-300 text-red-600 hover:bg-red-100">
-              Deactivate
-            </Button>
-          </div>
-          <div className="mt-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-4">
-            <div>
-              <div className="text-sm font-medium text-red-700">Delete Account</div>
-              <div className="text-xs text-red-600">Permanently delete your account and all data. This cannot be undone.</div>
-            </div>
-            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="size-4" /> Delete
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -335,40 +309,18 @@ export default function SellerSettingsPage() {
           <PasswordForm onSubmit={handleChangePassword} />
         </DialogContent>
       </Dialog>
-
-      {/* Delete Account Dialog */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Delete Account?</DialogTitle>
-            <DialogDescription>
-              This will permanently delete your seller account, store, products, and all associated data. <strong>This action cannot be undone.</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button variant="destructive" onClick={() => { setDeleteOpen(false); toast.add({ title: "Account deletion requested", description: "Contact support to complete deletion.", type: "success" }) }}>
-              <Trash2 className="size-4" /> Delete Permanently
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
 
-function PasswordForm({
-  onSubmit,
-}: {
-  onSubmit: (data: { current: string; new: string; confirm: string }) => void
-}) {
+function PasswordForm({ onSubmit }: { onSubmit: (data: { current: string; new: string; confirm: string }) => void }) {
   const [current, setCurrent] = React.useState("")
   const [newPwd, setNewPwd] = React.useState("")
   const [confirm, setConfirm] = React.useState("")
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!current || !newPwd || newPwd !== confirm) return
+    if (!current || !newPwd || !confirm) return
     onSubmit({ current, new: newPwd, confirm })
   }
 
@@ -386,14 +338,11 @@ function PasswordForm({
         <Field>
           <FieldLabel htmlFor="new">New Password</FieldLabel>
           <Input id="new" type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} required />
-          <FieldDescription>At least 8 characters with a mix of letters and numbers</FieldDescription>
+          <FieldDescription>At least 8 characters</FieldDescription>
         </Field>
         <Field>
           <FieldLabel htmlFor="confirm">Confirm New Password</FieldLabel>
           <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
-          {confirm && newPwd !== confirm && (
-            <FieldDescription className="text-red-500">Passwords do not match</FieldDescription>
-          )}
         </Field>
       </FieldGroup>
       <DialogFooter>

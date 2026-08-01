@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -12,8 +13,11 @@ import {
 } from "@/components/ui/breadcrumb"
 import { SellerSidebar } from "@/components/seller-sidebar"
 import { UserSidebar } from "@/components/user-sidebar"
-import { usePathname } from "next/navigation"
+import { AdminSidebar } from "@/components/admin-sidebar"
+import { usePathname, useRouter } from "next/navigation"
 import { Toaster } from "@/components/ui/toast"
+import { useAuth } from "@/lib/auth-context"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const pageTitles: Record<string, string> = {
   // Seller
@@ -53,6 +57,18 @@ const pageTitles: Record<string, string> = {
   "/dashboard/seller/settings": "Settings",
   "/dashboard/seller/settings/notifications": "Notifications",
   "/dashboard/seller/settings/security": "Security",
+  // Admin
+  "/dashboard/admin": "Overview",
+  "/dashboard/admin/analytics": "Analytics",
+  "/dashboard/admin/users": "Users",
+  "/dashboard/admin/sellers": "Sellers",
+  "/dashboard/admin/products": "Products",
+  "/dashboard/admin/orders": "Orders",
+  "/dashboard/admin/payments": "Payments",
+  "/dashboard/admin/wallets": "Wallets",
+  "/dashboard/admin/wallets/payouts": "Payout Requests",
+  "/dashboard/admin/refunds": "Refunds",
+  "/dashboard/admin/settings": "Settings",
   // User
   "/dashboard/user": "Overview",
   "/dashboard/user/orders": "Orders",
@@ -79,13 +95,34 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, loading } = useAuth()
   const isSeller = pathname.startsWith("/dashboard/seller")
-  const section = isSeller ? "Seller Center" : "My Account"
+  const isAdmin = pathname.startsWith("/dashboard/admin")
+  const section = isAdmin ? "Admin Panel" : isSeller ? "Seller Center" : "My Account"
   const pageTitle = pageTitles[pathname] ?? "Dashboard"
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/auth?tab=login")
+    }
+  }, [loading, user, router])
+
+  if (loading || !user) {
+    return (
+      <div className="flex h-svh items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Skeleton className="size-12 rounded-xl" />
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-48" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <SidebarProvider>
-      {isSeller ? <SellerSidebar /> : <UserSidebar />}
+      {isAdmin ? <AdminSidebar /> : isSeller ? <SellerSidebar /> : <UserSidebar />}
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">
@@ -97,7 +134,7 @@ export default function DashboardLayout({
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href={isSeller ? "/dashboard/seller" : "/dashboard/user"}>
+                  <BreadcrumbLink href={isAdmin ? "/dashboard/admin" : isSeller ? "/dashboard/seller" : "/dashboard/user"}>
                     {section}
                   </BreadcrumbLink>
                 </BreadcrumbItem>

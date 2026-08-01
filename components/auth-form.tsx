@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, Suspense } from "react"
+import { useState, Suspense, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { toast } from "@/components/ui/toast"
@@ -16,8 +16,21 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Mail, Lock, User, Phone, Store, Eye, EyeOff } from "lucide-react"
+import { useAuth, type ApiError } from "@/lib/auth-context"
+import { api } from "@/lib/api"
 
 type AuthMode = "login" | "register" | "seller"
+
+type BusinessCategory = {
+  id: string
+  name: string
+  description: string | null
+}
+
+function getApiError(err: unknown): string {
+  const e = err as ApiError
+  return e?.detail || "Something went wrong. Please try again."
+}
 
 function AuthFormInner({
   className,
@@ -25,6 +38,7 @@ function AuthFormInner({
 }: React.ComponentProps<"div">) {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { login, register, registerSeller } = useAuth()
   const initialTab = searchParams.get("tab") as AuthMode
   const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState<AuthMode>(
@@ -34,34 +48,147 @@ function AuthFormInner({
   )
   const [showPassword, setShowPassword] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Login state
+  const [loginEmail, setLoginEmail] = useState("")
+  const [loginPassword, setLoginPassword] = useState("")
+
+  // Register state
+  const [regFirstName, setRegFirstName] = useState("")
+  const [regLastName, setRegLastName] = useState("")
+  const [regEmail, setRegEmail] = useState("")
+  const [regPhone, setRegPhone] = useState("")
+  const [regPassword, setRegPassword] = useState("")
+
+  // Seller state
+  const [sellerFirstName, setSellerFirstName] = useState("")
+  const [sellerLastName, setSellerLastName] = useState("")
+  const [sellerBusinessName, setSellerBusinessName] = useState("")
+  const [sellerEmail, setSellerEmail] = useState("")
+  const [sellerPhone, setSellerPhone] = useState("")
+  const [sellerPassword, setSellerPassword] = useState("")
+  const [sellerAgreement, setSellerAgreement] = useState(false)
+  const [categories, setCategories] = useState<BusinessCategory[]>([])
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([])
+
+  useEffect(() => {
+    if (mode === "seller" && categories.length === 0) {
+      api.get<BusinessCategory[]>("/admin/business-categories")
+        .then(setCategories)
+        .catch(() => {
+          // If admin endpoint fails, use fallback categories
+          setCategories([
+            { id: "fallback-electronics", name: "Electronics", description: null },
+            { id: "fallback-fashion", name: "Fashion & Apparel", description: null },
+            { id: "fallback-home", name: "Home & Garden", description: null },
+            { id: "fallback-beauty", name: "Health & Beauty", description: null },
+            { id: "fallback-food", name: "Food & Beverages", description: null },
+            { id: "fallback-general", name: "General Retail", description: null },
+          ])
+        })
+    }
+  }, [mode, categories.length])
+
+  const toggleCategory = (id: string) => {
+    setSelectedCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    )
+  }
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      if (mode === "login") {
-        toast.add({
-          title: "Welcome back!",
-          description: "You have been signed in successfully.",
-          type: "success",
-        })
-        router.push("/dashboard/user")
-      } else if (mode === "register") {
-        toast.add({
-          title: "Account created!",
-          description: "Welcome to XerinMarket. Check your email to verify your account.",
-          type: "success",
-        })
-        router.push("/dashboard/user")
-      } else if (mode === "seller") {
-        toast.add({
-          title: "Welcome to Seller Center!",
-          description: "Your seller account is ready. Let's start selling.",
-          type: "success",
-        })
+    try {
+      const user = await login(loginEmail, loginPassword)
+      toast.add({
+        title: "Welcome back!",
+        description: "You have been signed in successfully.",
+        type: "success",
+      })
+      if (user.account_type === "seller" || user.is_seller) {
         router.push("/dashboard/seller")
+      } else if (user.account_type === "admin" || user.account_type === "super_admin") {
+        router.push("/dashboard/admin")
+      } else {
+        router.push("/dashboard/user")
       }
-    }, 2000)
+    } catch (err) {
+      toast.add({
+        title: "Sign in failed",
+        description: getApiError(err),
+        type: "error",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await register({
+        first_name: regFirstName,
+        last_name: regLastName,
+        email: regEmail,
+        phone: regPhone,
+        password: regPassword,
+      })
+      toast.add({
+        title: "Account created!",
+        description: "Welcome to XerinMarket. Check your phone for OTP to verify your account.",
+        type: "success",
+      })
+      setMode("login")
+      setLoginEmail(regEmail)
+    } catch (err) {
+      toast.add({
+        title: "Registration failed",
+        description: getApiError(err),
+        type: "error",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSellerRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (selectedCategoryIds.length === 0) {
+      toast.add({
+        title: "Select categories",
+        description: "Please select at least one business category.",
+        type: "error",
+      })
+      return
+    }
+    setLoading(true)
+    try {
+      await registerSeller({
+        first_name: sellerFirstName,
+        last_name: sellerLastName,
+        email: sellerEmail,
+        phone: sellerPhone,
+        password: sellerPassword,
+        business_name: sellerBusinessName,
+        business_category_ids: selectedCategoryIds,
+        agreement_accepted: true,
+      })
+      toast.add({
+        title: "Seller account created!",
+        description: "Check your phone for OTP to verify your account.",
+        type: "success",
+      })
+      setMode("login")
+      setLoginEmail(sellerEmail)
+    } catch (err) {
+      toast.add({
+        title: "Seller registration failed",
+        description: getApiError(err),
+        type: "error",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -98,7 +225,7 @@ function AuthFormInner({
 
         {/* LOGIN */}
         <TabsContent value="login">
-          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-4" onSubmit={handleLogin}>
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="login-email">Email</FieldLabel>
@@ -109,6 +236,8 @@ function AuthFormInner({
                     type="email"
                     placeholder="m@example.com"
                     className="pl-9"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
                     required
                   />
                 </div>
@@ -130,6 +259,8 @@ function AuthFormInner({
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     className="pl-9 pr-9"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
                     required
                   />
                   <button
@@ -199,21 +330,36 @@ function AuthFormInner({
 
         {/* REGISTER */}
         <TabsContent value="register">
-          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-4" onSubmit={handleRegister}>
             <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="reg-name">Full Name</FieldLabel>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <div className="grid grid-cols-2 gap-3">
+                <Field>
+                  <FieldLabel htmlFor="reg-first-name">First Name</FieldLabel>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="reg-first-name"
+                      type="text"
+                      placeholder="John"
+                      className="pl-9"
+                      value={regFirstName}
+                      onChange={(e) => setRegFirstName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="reg-last-name">Last Name</FieldLabel>
                   <Input
-                    id="reg-name"
+                    id="reg-last-name"
                     type="text"
-                    placeholder="John Doe"
-                    className="pl-9"
+                    placeholder="Doe"
+                    value={regLastName}
+                    onChange={(e) => setRegLastName(e.target.value)}
                     required
                   />
-                </div>
-              </Field>
+                </Field>
+              </div>
               <Field>
                 <FieldLabel htmlFor="reg-email">Email</FieldLabel>
                 <div className="relative">
@@ -223,6 +369,8 @@ function AuthFormInner({
                     type="email"
                     placeholder="m@example.com"
                     className="pl-9"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
                     required
                   />
                 </div>
@@ -236,6 +384,8 @@ function AuthFormInner({
                     type="tel"
                     placeholder="+255 7XX XXX XXX"
                     className="pl-9"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
                     required
                   />
                 </div>
@@ -247,9 +397,12 @@ function AuthFormInner({
                   <Input
                     id="reg-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
+                    placeholder="Min. 10 chars, 1 uppercase, 1 number"
                     className="pl-9 pr-9"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
                     required
+                    minLength={10}
                   />
                   <button
                     type="button"
@@ -259,6 +412,9 @@ function AuthFormInner({
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
+                <FieldDescription>
+                  At least 10 characters with 1 uppercase letter and 1 number.
+                </FieldDescription>
               </Field>
               <Field orientation="horizontal" className="items-start gap-2">
                 <Checkbox id="terms" className="mt-0.5" required />
@@ -295,8 +451,36 @@ function AuthFormInner({
 
         {/* SELLER REGISTER */}
         <TabsContent value="seller">
-          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-4" onSubmit={handleSellerRegister}>
             <FieldGroup>
+              <div className="grid grid-cols-2 gap-3">
+                <Field>
+                  <FieldLabel htmlFor="seller-first-name">First Name</FieldLabel>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="seller-first-name"
+                      type="text"
+                      placeholder="John"
+                      className="pl-9"
+                      value={sellerFirstName}
+                      onChange={(e) => setSellerFirstName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="seller-last-name">Last Name</FieldLabel>
+                  <Input
+                    id="seller-last-name"
+                    type="text"
+                    placeholder="Doe"
+                    value={sellerLastName}
+                    onChange={(e) => setSellerLastName(e.target.value)}
+                    required
+                  />
+                </Field>
+              </div>
               <Field>
                 <FieldLabel htmlFor="seller-name">Business Name</FieldLabel>
                 <div className="relative">
@@ -306,6 +490,8 @@ function AuthFormInner({
                     type="text"
                     placeholder="Acme Trading Co."
                     className="pl-9"
+                    value={sellerBusinessName}
+                    onChange={(e) => setSellerBusinessName(e.target.value)}
                     required
                   />
                 </div>
@@ -319,6 +505,8 @@ function AuthFormInner({
                     type="email"
                     placeholder="business@example.com"
                     className="pl-9"
+                    value={sellerEmail}
+                    onChange={(e) => setSellerEmail(e.target.value)}
                     required
                   />
                 </div>
@@ -332,8 +520,35 @@ function AuthFormInner({
                     type="tel"
                     placeholder="+255 7XX XXX XXX"
                     className="pl-9"
+                    value={sellerPhone}
+                    onChange={(e) => setSellerPhone(e.target.value)}
                     required
                   />
+                </div>
+              </Field>
+              <Field>
+                <FieldLabel>Business Categories</FieldLabel>
+                <FieldDescription>Select at least one category for your business.</FieldDescription>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {categories.length === 0 ? (
+                    <span className="text-sm text-muted-foreground">Loading categories...</span>
+                  ) : (
+                    categories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => toggleCategory(cat.id)}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                          selectedCategoryIds.includes(cat.id)
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input bg-background hover:bg-muted"
+                        )}
+                      >
+                        {cat.name}
+                      </button>
+                    ))
+                  )}
                 </div>
               </Field>
               <Field>
@@ -343,9 +558,12 @@ function AuthFormInner({
                   <Input
                     id="seller-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
+                    placeholder="Min. 10 chars, 1 uppercase, 1 number"
                     className="pl-9 pr-9"
+                    value={sellerPassword}
+                    onChange={(e) => setSellerPassword(e.target.value)}
                     required
+                    minLength={10}
                   />
                   <button
                     type="button"
@@ -355,9 +573,18 @@ function AuthFormInner({
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
+                <FieldDescription>
+                  At least 10 characters with 1 uppercase letter and 1 number.
+                </FieldDescription>
               </Field>
               <Field orientation="horizontal" className="items-start gap-2">
-                <Checkbox id="seller-terms" className="mt-0.5" required />
+                <Checkbox
+                  id="seller-terms"
+                  className="mt-0.5"
+                  checked={sellerAgreement}
+                  onCheckedChange={(val) => setSellerAgreement(!!val)}
+                  required
+                />
                 <FieldLabel
                   htmlFor="seller-terms"
                   className="text-sm font-normal leading-snug"
@@ -375,7 +602,7 @@ function AuthFormInner({
                   </a>
                 </FieldLabel>
               </Field>
-              <Button type="submit" className="w-full" loading={loading}>
+              <Button type="submit" className="w-full" loading={loading} disabled={!sellerAgreement}>
                 {loading ? "Registering..." : "Register as Seller"}
               </Button>
               <FieldDescription className="text-center">

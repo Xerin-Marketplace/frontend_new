@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { categories } from "@/lib/mock-data"
 import * as Icons from "lucide-react"
+import { cn } from "@/lib/utils"
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -53,10 +54,10 @@ export function Header() {
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 md:gap-6">
         {/* Mobile menu */}
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden">
-              <Menu className="size-5" />
-            </Button>
+          <SheetTrigger
+            render={<Button variant="ghost" size="icon" className="md:hidden" />}
+          >
+            <Menu className="size-5" />
           </SheetTrigger>
           <SheetContent side="left" className="w-80">
             <SheetHeader>
@@ -133,30 +134,36 @@ export function Header() {
 
         {/* Actions */}
         <div className="flex items-center gap-1 md:gap-2">
-          <Button variant="ghost" size="icon" className="relative" asChild>
-            <Link href="/wishlist">
-              <Heart className="size-5" />
-              <Badge className="absolute -right-0.5 -top-0.5 size-4 justify-center p-0 text-[10px]">
-                3
-              </Badge>
-            </Link>
-          </Button>
-          <Button variant="ghost" size="icon" className="relative" asChild>
-            <Link href="/cart">
-              <ShoppingCart className="size-5" />
-              <Badge className="absolute -right-0.5 -top-0.5 size-4 justify-center p-0 text-[10px]">
-                2
-              </Badge>
-            </Link>
-          </Button>
-          <Button variant="ghost" size="icon" className="hidden md:flex" asChild>
-            <Link href="/login">
-              <User className="size-5" />
-            </Link>
-          </Button>
-          <Button size="sm" className="hidden md:flex" asChild>
-            <Link href="/login">Sign In</Link>
-          </Button>
+          <Link
+            href="/wishlist"
+            className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "relative")}
+          >
+            <Heart className="size-5" />
+            <Badge className="absolute -right-0.5 -top-0.5 size-4 justify-center p-0 text-[10px]">
+              3
+            </Badge>
+          </Link>
+          <Link
+            href="/cart"
+            className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "relative")}
+          >
+            <ShoppingCart className="size-5" />
+            <Badge className="absolute -right-0.5 -top-0.5 size-4 justify-center p-0 text-[10px]">
+              2
+            </Badge>
+          </Link>
+          <Link
+            href="/login"
+            className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "hidden md:flex")}
+          >
+            <User className="size-5" />
+          </Link>
+          <Link
+            href="/login"
+            className={cn(buttonVariants({ size: "sm" }), "hidden md:flex")}
+          >
+            Sign In
+          </Link>
         </div>
       </div>
 

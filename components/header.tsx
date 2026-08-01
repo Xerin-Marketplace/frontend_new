@@ -11,7 +11,6 @@ import {
   Menu,
   Heart,
   User,
-  Store,
   Package,
   Home,
   ChevronRight,
@@ -61,9 +60,11 @@ export function Header() {
 
         {/* Logo */}
         <Link href="/" className="flex shrink-0 items-center gap-2">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Store className="size-5" />
-          </div>
+          <img
+            src="/apple-touch-icon.png"
+            alt="XerinMarket"
+            className="size-9 rounded-lg object-cover"
+          />
           <span className="text-base font-bold tracking-tight sm:text-lg">
             Xerin<span className="text-primary">Market</span>
           </span>
@@ -159,70 +160,64 @@ export function Header() {
       {mobileOpen && (
         <div className="fixed inset-0 z-[60] md:hidden">
           <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
             onClick={() => setMobileOpen(false)}
           />
           <div
-            className="absolute left-0 top-0 h-full w-[85%] max-w-[340px] overflow-y-auto bg-background shadow-2xl"
+            className="absolute left-0 top-0 h-full w-[88%] max-w-[360px] overflow-y-auto bg-background shadow-2xl animate-in slide-in-from-left duration-300"
             style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Drawer header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-background p-4">
-              <div className="flex items-center gap-2">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Store className="size-5" />
-                </div>
-                <span className="text-lg font-bold tracking-tight">
-                  Xerin<span className="text-primary">Market</span>
-                </span>
-              </div>
+            {/* Drawer header with gradient */}
+            <div className="relative bg-gradient-to-br from-primary to-primary/80 px-5 pb-5 pt-6 text-primary-foreground">
               <button
                 onClick={() => setMobileOpen(false)}
-                className="flex size-9 items-center justify-center rounded-lg hover:bg-muted"
+                className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20"
               >
                 <X className="size-5" />
               </button>
+              <div className="flex items-center gap-3">
+                <img
+                  src="/apple-touch-icon.png"
+                  alt="XerinMarket"
+                  className="size-12 rounded-xl object-cover ring-2 ring-white/20"
+                />
+                <div>
+                  <p className="text-xl font-bold leading-tight">
+                    XerinMarket
+                  </p>
+                  <p className="text-xs text-primary-foreground/70">
+                    Buy & Sell with confidence
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Drawer content */}
             <div className="p-3">
               {/* Quick links */}
-              <Link
-                href="/"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-3.5 text-sm font-medium hover:bg-muted"
-              >
-                <Home className="size-5 text-primary" /> Home
-              </Link>
-              <Link
-                href="/products"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-3.5 text-sm font-medium hover:bg-muted"
-              >
-                <Package className="size-5 text-primary" /> All Products
-              </Link>
-              <Link
-                href="/deals"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-3.5 text-sm font-medium hover:bg-muted"
-              >
-                <Tag className="size-5 text-primary" /> Hot Deals
-              </Link>
-              <Link
-                href="/track-order"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-3.5 text-sm font-medium hover:bg-muted"
-              >
-                <Truck className="size-5 text-primary" /> Track Order
-              </Link>
-              <Link
-                href="/help"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-3.5 text-sm font-medium hover:bg-muted"
-              >
-                <Headphones className="size-5 text-primary" /> Help Center
-              </Link>
+              <p className="px-3 pb-2 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Menu
+              </p>
+              {[
+                { href: "/", label: "Home", icon: Home },
+                { href: "/products", label: "All Products", icon: Package },
+                { href: "/deals", label: "Hot Deals", icon: Tag },
+                { href: "/track-order", label: "Track Order", icon: Truck },
+                { href: "/help", label: "Help Center", icon: Headphones },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
+                >
+                  <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <item.icon className="size-4.5" />
+                  </div>
+                  {item.label}
+                </Link>
+              ))}
 
               {/* Divider */}
               <div className="my-3 h-px bg-border" />
@@ -238,12 +233,18 @@ export function Header() {
                     key={cat.id}
                     href={`/products?category=${cat.id}`}
                     onClick={() => setMobileOpen(false)}
-                    className="flex items-center justify-between rounded-lg px-3 py-3 text-sm hover:bg-muted"
+                    className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted active:scale-[0.98]"
                   >
                     <span className="flex items-center gap-3">
-                      <Icon className="size-4" /> {cat.name}
+                      <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-foreground">
+                        <Icon className="size-4" />
+                      </div>
+                      {cat.name}
                     </span>
-                    <ChevronRight className="size-4 text-muted-foreground" />
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{cat.productCount}</span>
+                      <ChevronRight className="size-4 text-muted-foreground" />
+                    </div>
                   </Link>
                 )
               })}
@@ -252,19 +253,28 @@ export function Header() {
               <div className="my-3 h-px bg-border" />
 
               {/* Account */}
+              <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Account
+              </p>
               <Link
                 href="/login"
                 onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-3.5 text-sm font-medium hover:bg-muted"
+                className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
               >
-                <User className="size-5 text-primary" /> Sign In / Register
+                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <User className="size-4.5" />
+                </div>
+                Sign In / Register
               </Link>
               <Link
                 href="/seller"
                 onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-3.5 text-sm font-medium hover:bg-muted"
+                className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
               >
-                <TrendingUp className="size-5 text-primary" /> Become a Seller
+                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <TrendingUp className="size-4.5" />
+                </div>
+                Become a Seller
               </Link>
             </div>
           </div>

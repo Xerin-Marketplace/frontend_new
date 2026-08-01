@@ -1,5 +1,4 @@
 import Link from "next/link"
-import { Store } from "lucide-react"
 import { categories } from "@/lib/mock-data"
 
 function FacebookIcon({ className }: { className?: string }) {
@@ -43,9 +42,11 @@ export function Footer() {
           {/* Brand */}
           <div className="flex flex-col gap-4">
             <Link href="/" className="flex items-center gap-2">
-              <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Store className="size-5" />
-              </div>
+              <img
+                src="/apple-touch-icon.png"
+                alt="XerinMarket"
+                className="size-9 rounded-lg object-cover"
+              />
               <span className="text-lg font-bold tracking-tight">
                 Xerin<span className="text-primary">Market</span>
               </span>

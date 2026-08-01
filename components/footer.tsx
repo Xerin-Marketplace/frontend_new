@@ -106,7 +106,7 @@ export function Footer() {
             <ul className="flex flex-col gap-2.5 text-sm text-muted-foreground">
               <li><Link href="/products" className="hover:text-primary">All Products</Link></li>
               <li><Link href="/deals" className="hover:text-primary">Hot Deals</Link></li>
-              <li><Link href="/seller" className="hover:text-primary">Become a Seller</Link></li>
+              <li><Link href="/auth?tab=seller" className="hover:text-primary">Become a Seller</Link></li>
               <li><Link href="/track-order" className="hover:text-primary">Track Order</Link></li>
               <li><Link href="/help" className="hover:text-primary">Help Center</Link></li>
             </ul>

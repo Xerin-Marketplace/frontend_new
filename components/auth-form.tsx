@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { toast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -13,48 +15,91 @@ import {
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Mail, Lock, User, Phone, Store } from "lucide-react"
+import { Mail, Lock, User, Phone, Store, Eye, EyeOff } from "lucide-react"
 
 type AuthMode = "login" | "register" | "seller"
 
-export function LoginForm({
+function AuthFormInner({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const initialTab = searchParams.get("tab") as AuthMode
   const [loading, setLoading] = useState(false)
-  const [mode, setMode] = useState<AuthMode>("login")
+  const [mode, setMode] = useState<AuthMode>(
+    initialTab === "seller" || initialTab === "register" || initialTab === "login"
+      ? initialTab
+      : "login"
+  )
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => setLoading(false), 2000)
+    setTimeout(() => {
+      setLoading(false)
+      if (mode === "login") {
+        toast.add({
+          title: "Welcome back!",
+          description: "You have been signed in successfully.",
+          type: "success",
+        })
+        router.push("/dashboard/user")
+      } else if (mode === "register") {
+        toast.add({
+          title: "Account created!",
+          description: "Welcome to XerinMarket. Check your email to verify your account.",
+          type: "success",
+        })
+        router.push("/dashboard/user")
+      } else if (mode === "seller") {
+        toast.add({
+          title: "Welcome to Seller Center!",
+          description: "Your seller account is ready. Let's start selling.",
+          type: "success",
+        })
+        router.push("/dashboard/seller")
+      }
+    }, 2000)
   }
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
+      {/* Header */}
+      <div className="flex flex-col items-center gap-2 text-center">
+        <img
+          src="/apple-touch-icon.png"
+          alt="XerinMarket"
+          className="size-14 rounded-2xl object-cover shadow-md"
+        />
+        <h1 className="text-2xl font-bold tracking-tight">
+          {mode === "login" && "Welcome back"}
+          {mode === "register" && "Create your account"}
+          {mode === "seller" && "Become a Seller"}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {mode === "login" && "Sign in to continue to XerinMarket"}
+          {mode === "register" && "Join XerinMarket and start shopping today"}
+          {mode === "seller" && "Register your business and start selling"}
+        </p>
+      </div>
+
       <Tabs
         value={mode}
         onValueChange={(v) => setMode(v as AuthMode)}
         className="w-full"
       >
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="login">Login</TabsTrigger>
+          <TabsTrigger value="login">Sign In</TabsTrigger>
           <TabsTrigger value="register">Sign Up</TabsTrigger>
           <TabsTrigger value="seller">Seller</TabsTrigger>
         </TabsList>
 
         {/* LOGIN */}
         <TabsContent value="login">
-          <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <FieldGroup>
-              <div className="flex flex-col items-center gap-1 text-center">
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Welcome back
-                </h1>
-                <p className="text-sm text-balance text-muted-foreground">
-                  Enter your credentials to access your account
-                </p>
-              </div>
               <Field>
                 <FieldLabel htmlFor="login-email">Email</FieldLabel>
                 <div className="relative">
@@ -75,18 +120,25 @@ export function LoginForm({
                     href="/forgot-password"
                     className="ml-auto text-sm underline-offset-4 hover:underline"
                   >
-                    Forgot password?
+                    Forgot?
                   </a>
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="login-password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="pl-9"
+                    className="pl-9 pr-9"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
                 </div>
               </Field>
               <Field orientation="horizontal" className="items-center gap-2">
@@ -95,8 +147,7 @@ export function LoginForm({
                   Remember me for 30 days
                 </FieldLabel>
               </Field>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="size-4 animate-spin" />}
+              <Button type="submit" className="w-full" loading={loading}>
                 {loading ? "Signing in..." : "Sign in"}
               </Button>
               <FieldSeparator>Or continue with</FieldSeparator>
@@ -148,16 +199,8 @@ export function LoginForm({
 
         {/* REGISTER */}
         <TabsContent value="register">
-          <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <FieldGroup>
-              <div className="flex flex-col items-center gap-1 text-center">
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Create account
-                </h1>
-                <p className="text-sm text-balance text-muted-foreground">
-                  Join XerinMarket and start shopping today
-                </p>
-              </div>
               <Field>
                 <FieldLabel htmlFor="reg-name">Full Name</FieldLabel>
                 <div className="relative">
@@ -203,11 +246,18 @@ export function LoginForm({
                   <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="reg-password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="pl-9"
+                    className="pl-9 pr-9"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
                 </div>
               </Field>
               <Field orientation="horizontal" className="items-start gap-2">
@@ -226,8 +276,7 @@ export function LoginForm({
                   </a>
                 </FieldLabel>
               </Field>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="size-4 animate-spin" />}
+              <Button type="submit" className="w-full" loading={loading}>
                 {loading ? "Creating account..." : "Create account"}
               </Button>
               <FieldDescription className="text-center">
@@ -246,16 +295,8 @@ export function LoginForm({
 
         {/* SELLER REGISTER */}
         <TabsContent value="seller">
-          <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <FieldGroup>
-              <div className="flex flex-col items-center gap-1 text-center">
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Become a Seller
-                </h1>
-                <p className="text-sm text-balance text-muted-foreground">
-                  Register your business and start selling on XerinMarket
-                </p>
-              </div>
               <Field>
                 <FieldLabel htmlFor="seller-name">Business Name</FieldLabel>
                 <div className="relative">
@@ -301,11 +342,18 @@ export function LoginForm({
                   <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="seller-password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="pl-9"
+                    className="pl-9 pr-9"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
                 </div>
               </Field>
               <Field orientation="horizontal" className="items-start gap-2">
@@ -327,8 +375,7 @@ export function LoginForm({
                   </a>
                 </FieldLabel>
               </Field>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="size-4 animate-spin" />}
+              <Button type="submit" className="w-full" loading={loading}>
                 {loading ? "Registering..." : "Register as Seller"}
               </Button>
               <FieldDescription className="text-center">
@@ -346,5 +393,13 @@ export function LoginForm({
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+export function AuthForm(props: React.ComponentProps<"div">) {
+  return (
+    <Suspense fallback={null}>
+      <AuthFormInner {...props} />
+    </Suspense>
   )
 }

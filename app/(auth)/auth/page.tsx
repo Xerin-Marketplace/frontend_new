@@ -1,24 +1,28 @@
 "use client"
 
-import { LoginForm } from "@/components/login-form"
-import { ShoppingBag, ShieldCheck, Truck, TrendingUp } from "lucide-react"
+import { AuthForm } from "@/components/auth-form"
+import { Toaster } from "@/components/ui/toast"
+import { ShieldCheck, Truck, TrendingUp } from "lucide-react"
 
-export default function LoginPage() {
+export default function AuthPage() {
   return (
+    <>
     <div className="grid min-h-svh lg:grid-cols-2">
       {/* Left - Form */}
       <div className="flex flex-col gap-4 p-6 sm:p-8 md:p-10">
         <div className="flex justify-center gap-2 md:justify-start">
           <a href="/" className="flex items-center gap-2 font-semibold">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <ShoppingBag className="size-5" />
-            </div>
+            <img
+              src="/apple-touch-icon.png"
+              alt="XerinMarket"
+              className="size-9 rounded-lg object-cover"
+            />
             <span className="text-lg tracking-tight">XerinMarket</span>
           </a>
         </div>
         <div className="flex flex-1 items-center justify-center pb-10">
           <div className="w-full max-w-sm">
-            <LoginForm />
+            <AuthForm />
           </div>
         </div>
         <div className="text-center text-xs text-muted-foreground">
@@ -39,9 +43,11 @@ export default function LoginPage() {
 
         <div className="relative flex flex-col gap-2">
           <div className="flex items-center gap-2 text-white">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur">
-              <ShoppingBag className="size-6" />
-            </div>
+            <img
+              src="/apple-touch-icon.png"
+              alt="XerinMarket"
+              className="size-10 rounded-xl object-cover ring-2 ring-white/20"
+            />
             <span className="text-xl font-semibold tracking-tight">
               XerinMarket
             </span>
@@ -105,5 +111,7 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+    <Toaster />
+    </>
   )
 }

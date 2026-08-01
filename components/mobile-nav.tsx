@@ -10,7 +10,7 @@ const navItems = [
   { href: "/products", label: "Browse", icon: Search },
   { href: "/cart", label: "Cart", icon: ShoppingCart },
   { href: "/wishlist", label: "Saved", icon: Heart },
-  { href: "/login", label: "Account", icon: User },
+  { href: "/auth", label: "Account", icon: User },
 ]
 
 export function MobileNav() {

@@ -35,7 +35,7 @@ export function Header() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-1.5 text-xs">
           <p>Free shipping on orders over TSh 50,000</p>
           <div className="flex items-center gap-4">
-            <Link href="/seller" className="hover:underline">
+            <Link href="/auth?tab=seller" className="hover:underline">
               Become a Seller
             </Link>
             <Link href="/track-order" className="hover:underline">
@@ -115,13 +115,13 @@ export function Header() {
             </Badge>
           </Link>
           <Link
-            href="/login"
+            href="/auth"
             className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "hidden md:flex")}
           >
             <User className="size-5" />
           </Link>
           <Link
-            href="/login"
+            href="/auth"
             className={cn(buttonVariants({ size: "sm" }), "hidden md:flex")}
           >
             Sign In
@@ -257,7 +257,7 @@ export function Header() {
                 Account
               </p>
               <Link
-                href="/login"
+                href="/auth"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
               >
@@ -267,7 +267,7 @@ export function Header() {
                 Sign In / Register
               </Link>
               <Link
-                href="/seller"
+                href="/auth?tab=seller"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
               >

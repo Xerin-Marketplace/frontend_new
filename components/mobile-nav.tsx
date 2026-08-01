@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/products", label: "Search", icon: Search },
+  { href: "/products", label: "Browse", icon: Search },
   { href: "/cart", label: "Cart", icon: ShoppingCart },
-  { href: "/wishlist", label: "Wishlist", icon: Heart },
+  { href: "/wishlist", label: "Saved", icon: Heart },
   { href: "/login", label: "Account", icon: User },
 ]
 
@@ -17,8 +17,11 @@ export function MobileNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background md:hidden">
-      <div className="flex items-center justify-around px-2 py-2">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-lg md:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      <div className="flex items-stretch justify-around px-1 py-1">
         {navItems.map((item) => {
           const isActive =
             item.href === "/"
@@ -29,14 +32,31 @@ export function MobileNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-1 flex-col items-center gap-1 rounded-lg py-1.5 text-xs",
+                "flex flex-1 flex-col items-center justify-center gap-1 rounded-xl py-2.5 transition-all duration-200 min-h-[52px]",
                 isActive
                   ? "text-primary"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground active:scale-90 active:bg-muted"
               )}
             >
-              <item.icon className="size-5" />
-              <span className="font-medium">{item.label}</span>
+              <div className="relative">
+                {isActive && (
+                  <span className="absolute -top-2.5 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-primary" />
+                )}
+                <item.icon
+                  className={cn(
+                    "size-5 transition-transform",
+                    isActive && "scale-110"
+                  )}
+                />
+              </div>
+              <span
+                className={cn(
+                  "text-[10px] font-medium",
+                  isActive ? "opacity-100" : "opacity-70"
+                )}
+              >
+                {item.label}
+              </span>
             </Link>
           )
         })}

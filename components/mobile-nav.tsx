@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, Search, ShoppingCart, Heart, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
 
 const navItems = [
   { href: "/", label: "Home", icon: Home },
@@ -15,6 +16,9 @@ const navItems = [
 
 export function MobileNav() {
   const pathname = usePathname()
+  const { user, isAuthenticated } = useAuth()
+
+  const userInitials = user ? `${user.first_name?.[0] ?? ""}${user.last_name?.[0] ?? ""}`.toUpperCase() : ""
 
   return (
     <nav
@@ -30,7 +34,7 @@ export function MobileNav() {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={isAuthenticated && item.href === "/auth" ? "/dashboard/user" : item.href}
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-1 rounded-xl py-2.5 transition-all duration-200 min-h-[52px]",
                 isActive
@@ -42,12 +46,18 @@ export function MobileNav() {
                 {isActive && (
                   <span className="absolute -top-2.5 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-primary" />
                 )}
-                <item.icon
-                  className={cn(
-                    "size-5 transition-transform",
-                    isActive && "scale-110"
-                  )}
-                />
+                {item.href === "/auth" && isAuthenticated && user ? (
+                  <div className="flex size-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                    {userInitials || <User className="size-4" />}
+                  </div>
+                ) : (
+                  <item.icon
+                    className={cn(
+                      "size-5 transition-transform",
+                      isActive && "scale-110"
+                    )}
+                  />
+                )}
               </div>
               <span
                 className={cn(
@@ -55,7 +65,7 @@ export function MobileNav() {
                   isActive ? "opacity-100" : "opacity-70"
                 )}
               >
-                {item.label}
+                {item.href === "/auth" && isAuthenticated ? "Profile" : item.label}
               </span>
             </Link>
           )

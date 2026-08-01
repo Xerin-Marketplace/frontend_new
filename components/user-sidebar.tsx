@@ -12,7 +12,10 @@ import {
   MessageSquare,
   Star,
   Package,
-  TrendingUp,
+  CreditCard,
+  Truck,
+  Shield,
+  type LucideIcon,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -63,19 +66,38 @@ const userData = {
       icon: ShoppingBag,
       items: [
         { title: "All Orders", url: "/dashboard/user/orders" },
-        { title: "Track Order", url: "/dashboard/user/orders/track" },
-        { title: "Returns", url: "/dashboard/user/orders/returns" },
+        { title: "Track Shipment", url: "/dashboard/user/orders/tracking" },
+        { title: "Returns & Refunds", url: "/dashboard/user/orders/returns" },
+        { title: "Order History", url: "/dashboard/user/orders/history" },
       ],
     },
     {
-      title: "Account",
+      title: "Addresses",
+      url: "/dashboard/user/addresses",
+      icon: MapPin,
+      items: [
+        { title: "Saved Addresses", url: "/dashboard/user/addresses" },
+        { title: "Add Address", url: "/dashboard/user/addresses/new" },
+      ],
+    },
+    {
+      title: "Payments",
+      url: "/dashboard/user/payments",
+      icon: CreditCard,
+      items: [
+        { title: "Payment Methods", url: "/dashboard/user/payments" },
+        { title: "Transaction History", url: "/dashboard/user/payments/history" },
+      ],
+    },
+    {
+      title: "Settings",
       url: "/dashboard/user/settings",
       icon: Settings,
       items: [
         { title: "Profile", url: "/dashboard/user/settings" },
-        { title: "Addresses", url: "/dashboard/user/addresses" },
         { title: "Notifications", url: "/dashboard/user/settings/notifications" },
         { title: "Security", url: "/dashboard/user/settings/security" },
+        { title: "Privacy", url: "/dashboard/user/settings/privacy" },
       ],
     },
   ],

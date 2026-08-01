@@ -12,7 +12,11 @@ import {
   Truck,
   MessageSquare,
   Settings,
+  FileCheck,
+  Boxes,
+  CreditCard,
   TrendingUp,
+  type LucideIcon,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -53,7 +57,7 @@ const sellerData = {
       isActive: true,
       items: [
         { title: "Overview", url: "/dashboard/seller" },
-        { title: "Sales", url: "/dashboard/seller/analytics" },
+        { title: "Sales Analytics", url: "/dashboard/seller/analytics" },
         { title: "Revenue", url: "/dashboard/seller/revenue" },
       ],
     },
@@ -65,7 +69,18 @@ const sellerData = {
         { title: "All Products", url: "/dashboard/seller/products" },
         { title: "Add Product", url: "/dashboard/seller/products/new" },
         { title: "Categories", url: "/dashboard/seller/products/categories" },
-        { title: "Inventory", url: "/dashboard/seller/products/inventory" },
+        { title: "Brands", url: "/dashboard/seller/products/brands" },
+      ],
+    },
+    {
+      title: "Inventory",
+      url: "/dashboard/seller/inventory",
+      icon: Boxes,
+      items: [
+        { title: "Stock Overview", url: "/dashboard/seller/inventory" },
+        { title: "Low Stock Alerts", url: "/dashboard/seller/inventory/low-stock" },
+        { title: "Restock History", url: "/dashboard/seller/inventory/restocks" },
+        { title: "Settings", url: "/dashboard/seller/inventory/settings" },
       ],
     },
     {
@@ -74,19 +89,56 @@ const sellerData = {
       icon: ShoppingBag,
       items: [
         { title: "All Orders", url: "/dashboard/seller/orders" },
-        { title: "Pending", url: "/dashboard/seller/orders?status=pending" },
-        { title: "Completed", url: "/dashboard/seller/orders?status=completed" },
-        { title: "Returns", url: "/dashboard/seller/orders/returns" },
+        { title: "New Orders", url: "/dashboard/seller/orders?status=new" },
+        { title: "Processing", url: "/dashboard/seller/orders?status=processing" },
+        { title: "Shipped", url: "/dashboard/seller/orders?status=shipped" },
+        { title: "Delivered", url: "/dashboard/seller/orders?status=delivered" },
+        { title: "Cancellations", url: "/dashboard/seller/orders/cancellations" },
       ],
     },
     {
-      title: "Marketing",
-      url: "/dashboard/seller/promotions",
-      icon: Tag,
+      title: "KYC & Verification",
+      url: "/dashboard/seller/kyc",
+      icon: FileCheck,
       items: [
-        { title: "Promotions", url: "/dashboard/seller/promotions" },
-        { title: "Coupons", url: "/dashboard/seller/promotions/coupons" },
-        { title: "Campaigns", url: "/dashboard/seller/promotions/campaigns" },
+        { title: "Status", url: "/dashboard/seller/kyc" },
+        { title: "Upload Documents", url: "/dashboard/seller/kyc/upload" },
+        { title: "Document History", url: "/dashboard/seller/kyc/documents" },
+      ],
+    },
+    {
+      title: "Wallet & Payouts",
+      url: "/dashboard/seller/wallet",
+      icon: Wallet,
+      items: [
+        { title: "Balance", url: "/dashboard/seller/wallet" },
+        { title: "Transactions", url: "/dashboard/seller/wallet/transactions" },
+        { title: "Request Payout", url: "/dashboard/seller/wallet/payouts/new" },
+        { title: "Payout History", url: "/dashboard/seller/wallet/payouts" },
+        { title: "Payout Accounts", url: "/dashboard/seller/wallet/accounts" },
+      ],
+    },
+    {
+      title: "Store Profile",
+      url: "/dashboard/seller/store",
+      icon: Store,
+      items: [
+        { title: "Business Info", url: "/dashboard/seller/store" },
+        { title: "Business Profile", url: "/dashboard/seller/store/profile" },
+        { title: "Store Appearance", url: "/dashboard/seller/store/appearance" },
+        { title: "Policies", url: "/dashboard/seller/store/policies" },
+        { title: "Social Links", url: "/dashboard/seller/store/social" },
+      ],
+    },
+    {
+      title: "Shipping",
+      url: "/dashboard/seller/shipping",
+      icon: Truck,
+      items: [
+        { title: "Zones", url: "/dashboard/seller/shipping/zones" },
+        { title: "Methods", url: "/dashboard/seller/shipping/methods" },
+        { title: "Rates", url: "/dashboard/seller/shipping/rates" },
+        { title: "Shipments", url: "/dashboard/seller/shipping/shipments" },
       ],
     },
     {
@@ -94,23 +146,22 @@ const sellerData = {
       url: "/dashboard/seller/settings",
       icon: Settings,
       items: [
-        { title: "Store Profile", url: "/dashboard/seller/settings" },
-        { title: "Payments", url: "/dashboard/seller/settings/payments" },
-        { title: "Shipping", url: "/dashboard/seller/shipping" },
+        { title: "Account", url: "/dashboard/seller/settings" },
         { title: "Notifications", url: "/dashboard/seller/settings/notifications" },
+        { title: "Security", url: "/dashboard/seller/settings/security" },
       ],
     },
   ],
   projects: [
     {
-      name: "Wallet",
-      url: "/dashboard/seller/wallet",
-      icon: Wallet,
-    },
-    {
       name: "Analytics",
       url: "/dashboard/seller/analytics",
       icon: BarChart3,
+    },
+    {
+      name: "Promotions",
+      url: "/dashboard/seller/promotions",
+      icon: Tag,
     },
     {
       name: "Messages",

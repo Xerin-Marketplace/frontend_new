@@ -665,7 +665,7 @@ function AuthFormInner({
                 >
                   I agree to the{" "}
                   <a
-                    href="/seller-terms"
+                    href="/terms/seller"
                     className="underline underline-offset-4"
                   >
                     Seller Agreement

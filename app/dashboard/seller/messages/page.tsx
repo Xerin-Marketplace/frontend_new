@@ -1,5 +1,24 @@
-import { PlaceholderPage } from "@/components/placeholder-page"
+"use client"
+
+import { MessageSquare } from "lucide-react"
 
 export default function SellerMessagesPage() {
-  return <PlaceholderPage title="Messages" description="Communicate with customers and support team." />
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Messages</h2>
+        <p className="text-sm text-muted-foreground">Communicate with customers and support team.</p>
+      </div>
+
+      <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed py-20 text-center">
+        <MessageSquare className="size-12 text-muted-foreground" />
+        <div>
+          <p className="text-sm font-medium">No conversations yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Messages from customers and support will appear here.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
 }

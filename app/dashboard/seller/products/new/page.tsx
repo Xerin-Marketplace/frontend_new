@@ -1,5 +1,5 @@
-import { PlaceholderPage } from "@/components/placeholder-page"
+import { redirect } from "next/navigation"
 
 export default function SellerNewProductPage() {
-  return <PlaceholderPage title="Add Product" description="Create a new product listing with images, variants, and pricing." />
+  redirect("/dashboard/seller/products")
 }

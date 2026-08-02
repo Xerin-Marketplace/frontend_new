@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -30,6 +31,19 @@ import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, TableSkeleton, PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/toast"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart"
+import {
+  AreaChart,
+  Area,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from "recharts"
 
 type AnalyticsMoneySummary = {
   currency: string
@@ -131,54 +145,63 @@ export default function AdminOverviewPage() {
     )
   }
 
-  const maxAmount = Math.max(...sales.map((d) => Number(d.amount)), 1)
+  const chartData = sales.map((s) => ({
+    period: s.period,
+    amount: Number(s.amount),
+    orders: s.order_count,
+  }))
+
+  const chartConfig = {
+    amount: { label: "Revenue", color: "hsl(var(--chart-1))" },
+    orders: { label: "Orders", color: "hsl(var(--chart-2))" },
+  } satisfies ChartConfig
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <div className="animate-fade-in-up">
         <h2 className="text-2xl font-bold tracking-tight">Admin Overview</h2>
         <p className="text-sm text-muted-foreground">Platform-wide metrics and pending actions.</p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="opacity-0-init animate-fade-in-up">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Gross Sales</CardTitle>
             <DollarSign className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatPrice(Number(overview?.money.gross_sales ?? 0))}</div>
+            <div className="text-2xl font-bold animate-count-up">{formatPrice(Number(overview?.money.gross_sales ?? 0))}</div>
             <p className="mt-1 text-xs text-muted-foreground">Total platform sales</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="opacity-0-init animate-fade-in-up animation-delay-100">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Orders</CardTitle>
             <ShoppingBag className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{overview?.counts.orders ?? 0}</div>
+            <div className="text-2xl font-bold animate-count-up">{overview?.counts.orders ?? 0}</div>
             <p className="mt-1 text-xs text-muted-foreground">{overview?.counts.paid_orders ?? 0} paid</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="opacity-0-init animate-fade-in-up animation-delay-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Active Sellers</CardTitle>
             <Store className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{overview?.counts.active_sellers ?? 0}</div>
+            <div className="text-2xl font-bold animate-count-up">{overview?.counts.active_sellers ?? 0}</div>
             <p className="mt-1 text-xs text-muted-foreground">{overview?.counts.products ?? 0} products</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="opacity-0-init animate-fade-in-up animation-delay-300">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Commission Revenue</CardTitle>
             <TrendingUp className="size-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatPrice(Number(overview?.money.commission_revenue ?? 0))}</div>
+            <div className="text-2xl font-bold text-green-600 animate-count-up">{formatPrice(Number(overview?.money.commission_revenue ?? 0))}</div>
             <p className="mt-1 text-xs text-muted-foreground">Platform earnings</p>
           </CardContent>
         </Card>
@@ -229,27 +252,28 @@ export default function AdminOverviewPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Sales Trend</CardTitle>
+          <CardDescription>Revenue and orders over time</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end justify-between gap-3 h-48">
-            {sales.length === 0 ? (
-              <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">No sales data available.</div>
-            ) : (
-              sales.map((d) => (
-                <div key={d.period} className="flex flex-1 flex-col items-center gap-2">
-                  <div className="text-xs font-medium text-muted-foreground">{formatPrice(Number(d.amount))}</div>
-                  <div className="flex w-full items-end justify-center" style={{ height: "140px" }}>
-                    <div
-                      className="w-full max-w-[60px] rounded-t-md bg-primary transition-all hover:bg-primary/80"
-                      style={{ height: `${(Number(d.amount) / maxAmount) * 100}%` }}
-                    />
-                  </div>
-                  <div className="text-xs text-muted-foreground">{d.period}</div>
-                  <div className="text-xs font-medium">{d.order_count} orders</div>
-                </div>
-              ))
-            )}
-          </div>
+          {chartData.length === 0 ? (
+            <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">No sales data available.</div>
+          ) : (
+            <ChartContainer config={chartConfig} className="h-[200px] w-full">
+              <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+                <defs>
+                  <linearGradient id="adminFillAmount" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-amount)" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="var(--color-amount)" stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="period" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} fontSize={11} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} fontSize={11} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Area type="monotone" dataKey="amount" stroke="var(--color-amount)" strokeWidth={2} fill="url(#adminFillAmount)" name="Revenue" />
+              </AreaChart>
+            </ChartContainer>
+          )}
         </CardContent>
       </Card>
 

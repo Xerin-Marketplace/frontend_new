@@ -25,7 +25,6 @@ import {
   DollarSign,
   Package,
   ArrowUpRight,
-  ArrowDownRight,
   Truck,
   CheckCircle2,
   Clock,
@@ -36,6 +35,19 @@ import { api, type ApiError } from "@/lib/api"
 import { toast } from "@/components/ui/toast"
 import { useAuth } from "@/lib/auth-context"
 import { formatPrice } from "@/lib/store-types"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
+} from "@/components/ui/chart"
+import {
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts"
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -70,6 +82,23 @@ const statusConfig: Record<string, { variant: "default" | "secondary" | "outline
   cancelled: { variant: "destructive", icon: <Clock className="size-3" />, label: "Cancelled" },
   refunded: { variant: "destructive", icon: <Clock className="size-3" />, label: "Refunded" },
 }
+
+const orderPieConfig = {
+  value: { label: "Orders" },
+  delivered: { label: "Delivered", color: "hsl(var(--chart-2))" },
+  shipped: { label: "Shipped", color: "hsl(var(--chart-3))" },
+  processing: { label: "Processing", color: "hsl(var(--chart-4))" },
+  pending: { label: "Pending", color: "hsl(var(--chart-5))" },
+  cancelled: { label: "Cancelled", color: "hsl(var(--destructive))" },
+} satisfies ChartConfig
+
+const ORDER_PIE_COLORS = [
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+  "hsl(var(--destructive))",
+]
 
 export default function UserDashboardPage() {
   const { user } = useAuth()
@@ -134,7 +163,7 @@ export default function UserDashboardPage() {
           ))
         ) : (
           stats.map((stat) => (
-            <Card key={stat.title}>
+            <Card key={stat.title} className="animate-fade-in-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {stat.title}
@@ -142,7 +171,7 @@ export default function UserDashboardPage() {
                 <stat.icon className="size-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
+                <div className="text-2xl font-bold animate-count-up">{stat.value}</div>
                 <div className="flex items-center gap-1 text-xs">
                   <span className="text-muted-foreground">{stat.description}</span>
                 </div>
@@ -151,6 +180,56 @@ export default function UserDashboardPage() {
           ))
         )}
       </div>
+
+      {/* Order Status Distribution */}
+      {!loading && orders.length > 0 && (
+        <Card className="animate-fade-in-scale">
+          <CardHeader>
+            <CardTitle className="text-base">Order Status Distribution</CardTitle>
+            <CardDescription>Breakdown of your orders by current status</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const statusMap = new Map<string, number>()
+              orders.forEach((o) => {
+                statusMap.set(o.status, (statusMap.get(o.status) ?? 0) + 1)
+              })
+              const data = Array.from(statusMap.entries())
+                .map(([status, count]) => ({
+                  name: status.charAt(0).toUpperCase() + status.slice(1),
+                  value: count,
+                  key: status,
+                }))
+                .filter((d) => d.value > 0)
+
+              if (data.length === 0) return null
+
+              return (
+                <ChartContainer config={orderPieConfig} className="mx-auto h-[250px]">
+                  <PieChart>
+                    <Pie
+                      data={data}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      innerRadius={45}
+                      paddingAngle={4}
+                    >
+                      {data.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={ORDER_PIE_COLORS[index % ORDER_PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+                    <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+                  </PieChart>
+                </ChartContainer>
+              )
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Orders Table */}
       <Card>

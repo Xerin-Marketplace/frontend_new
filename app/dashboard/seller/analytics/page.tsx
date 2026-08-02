@@ -4,11 +4,11 @@ import * as React from "react"
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -22,13 +22,30 @@ import {
   DollarSign,
   ShoppingCart,
   Package,
-  Star,
   ArrowUpRight,
+  ArrowDownRight,
+  RefreshCw,
+  Wallet,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, TableSkeleton, PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/toast"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart"
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from "recharts"
 
 type AnalyticsMoneySummary = {
   currency: string
@@ -87,6 +104,15 @@ function getApiError(err: unknown): string {
   return e?.detail || "Something went wrong. Please try again."
 }
 
+const salesChartConfig = {
+  amount: { label: "Revenue", color: "hsl(var(--chart-1))" },
+  orders: { label: "Orders", color: "hsl(var(--chart-2))" },
+} satisfies ChartConfig
+
+const unitsChartConfig = {
+  units: { label: "Units Sold", color: "hsl(var(--chart-3))" },
+} satisfies ChartConfig
+
 export default function SellerAnalyticsPage() {
   const [range, setRange] = React.useState<"7d" | "30d" | "90d">("7d")
   const [overview, setOverview] = React.useState<AnalyticsOverview | null>(null)
@@ -134,108 +160,276 @@ export default function SellerAnalyticsPage() {
   const totalOrders = overview?.counts.orders ?? 0
   const avgOrderValue = Number(overview?.average_order_value ?? 0)
   const totalUnits = overview?.counts.units_sold ?? 0
-  const maxAmount = Math.max(...sales.map((d) => Number(d.amount)), 1)
+  const netEarnings = Number(overview?.money.seller_net_earnings ?? 0)
+  const commissionPaid = Number(overview?.money.commission_revenue ?? 0)
+  const refundRate = Number(overview?.refund_rate_percent ?? 0)
+  const refundedOrders = overview?.counts.refunded_orders ?? 0
+
+  const chartData = sales.map((s) => ({
+    period: s.period,
+    amount: Number(s.amount),
+    orders: s.order_count,
+    units: s.units,
+  }))
+
+  const productBarData = products.slice(0, 5).map((p) => ({
+    name: p.name.length > 15 ? p.name.slice(0, 15) + "…" : p.name,
+    sales: Number(p.gross_sales),
+    units: p.units,
+  }))
+
+  const stats = [
+    {
+      title: "Total Revenue",
+      value: formatPrice(totalRevenue),
+      sub: "Gross sales",
+      icon: TrendingUp,
+      trend: "up" as const,
+      color: "text-chart-1",
+      bg: "bg-chart-1/10",
+    },
+    {
+      title: "Total Orders",
+      value: totalOrders.toLocaleString(),
+      sub: `${overview?.counts.paid_orders ?? 0} paid`,
+      icon: ShoppingCart,
+      trend: "up" as const,
+      color: "text-chart-2",
+      bg: "bg-chart-2/10",
+    },
+    {
+      title: "Avg Order Value",
+      value: formatPrice(Math.round(avgOrderValue)),
+      sub: "Per order",
+      icon: DollarSign,
+      trend: "up" as const,
+      color: "text-chart-3",
+      bg: "bg-chart-3/10",
+    },
+    {
+      title: "Units Sold",
+      value: totalUnits.toLocaleString(),
+      sub: "Total units",
+      icon: Package,
+      trend: "up" as const,
+      color: "text-chart-4",
+      bg: "bg-chart-4/10",
+    },
+  ]
+
+  const secondaryStats = [
+    { title: "Net Earnings", value: formatPrice(netEarnings), icon: TrendingUp, color: "text-green-600" },
+    { title: "Commission Paid", value: formatPrice(commissionPaid), icon: DollarSign, color: "text-muted-foreground" },
+    { title: "Refund Rate", value: `${refundRate.toFixed(1)}%`, icon: RefreshCw, color: "text-muted-foreground" },
+    { title: "Wallet Available", value: formatPrice(Number(overview?.available_wallet_balance ?? 0)), icon: Wallet, color: "text-muted-foreground" },
+  ]
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="animate-fade-in-up">
           <h2 className="text-2xl font-bold tracking-tight">Analytics</h2>
           <p className="text-sm text-muted-foreground">Track your store performance, sales, and product insights.</p>
         </div>
-        <div className="flex gap-1 rounded-lg border p-1">
+        <div className="flex gap-1 rounded-lg border p-1 animate-fade-in-scale">
           {(["7d", "30d", "90d"] as const).map((r) => (
-            <Button
+            <button
               key={r}
-              variant={range === r ? "default" : "ghost"}
-              size="sm"
               onClick={() => setRange(r)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
+                range === r
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
             >
               {r === "7d" ? "7 Days" : r === "30d" ? "30 Days" : "90 Days"}
-            </Button>
+            </button>
           ))}
         </div>
       </div>
 
-      {/* Overview Stats */}
+      {/* Primary Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
-            <div className="flex items-center gap-1 text-green-600">
-              <TrendingUp className="size-4" />
-              <span className="text-xs font-medium">+12.5%</span>
-            </div>
+        {stats.map((stat, i) => (
+          <Card
+            key={stat.title}
+            className={`opacity-0-init animate-fade-in-up animation-delay-${i * 100}`}
+          >
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {stat.title}
+              </CardTitle>
+              <div className={`flex size-8 items-center justify-center rounded-lg ${stat.bg}`}>
+                <stat.icon className={`size-4 ${stat.color}`} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold animate-count-up">{stat.value}</div>
+              <div className="mt-1 flex items-center gap-1 text-xs">
+                {stat.trend === "up" ? (
+                  <ArrowUpRight className="size-3 text-green-500" />
+                ) : (
+                  <ArrowDownRight className="size-3 text-red-500" />
+                )}
+                <span className="text-muted-foreground">{stat.sub}</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Secondary Stats */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {secondaryStats.map((stat, i) => (
+          <Card
+            key={stat.title}
+            className={`opacity-0-init animate-fade-in-up animation-delay-${i * 100 + 400}`}
+          >
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {stat.title}
+              </CardTitle>
+              <stat.icon className={`size-4 ${stat.color}`} />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold">{stat.value}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Sales Area Chart + Units Bar Chart */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="lg:col-span-4 opacity-0-init animate-fade-in-scale animation-delay-500">
+          <CardHeader>
+            <CardTitle>Sales & Orders Trend</CardTitle>
+            <CardDescription>Revenue and order count over time</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatPrice(totalRevenue)}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Gross sales</p>
+            {chartData.length === 0 ? (
+              <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+                No sales data for this period.
+              </div>
+            ) : (
+              <ChartContainer config={salesChartConfig} className="h-[300px] w-full">
+                <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+                  <defs>
+                    <linearGradient id="sellerFillAmount" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-amount)" stopOpacity={0.5} />
+                      <stop offset="100%" stopColor="var(--color-amount)" stopOpacity={0.05} />
+                    </linearGradient>
+                    <linearGradient id="sellerFillOrders" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-orders)" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="var(--color-orders)" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="period"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    minTickGap={24}
+                    fontSize={11}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                    fontSize={11}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                    fontSize={11}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Area
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="amount"
+                    stroke="var(--color-amount)"
+                    strokeWidth={2}
+                    fill="url(#sellerFillAmount)"
+                    name="Revenue"
+                  />
+                  <Area
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="orders"
+                    stroke="var(--color-orders)"
+                    strokeWidth={2}
+                    fill="url(#sellerFillOrders)"
+                    name="Orders"
+                  />
+                </AreaChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Orders</CardTitle>
-            <ShoppingCart className="size-4 text-muted-foreground" />
+
+        <Card className="lg:col-span-3 opacity-0-init animate-fade-in-scale animation-delay-700">
+          <CardHeader>
+            <CardTitle>Units Sold</CardTitle>
+            <CardDescription>Daily units sold over time</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalOrders}</div>
-            <p className="mt-1 text-xs text-muted-foreground">{overview?.counts.paid_orders ?? 0} paid</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Order Value</CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatPrice(Math.round(avgOrderValue))}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Per order</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Units Sold</CardTitle>
-            <Package className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalUnits.toLocaleString()}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Total units</p>
+            {chartData.length === 0 ? (
+              <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+                No units data for this period.
+              </div>
+            ) : (
+              <ChartContainer config={unitsChartConfig} className="h-[300px] w-full">
+                <BarChart data={chartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="period"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    minTickGap={24}
+                    fontSize={11}
+                  />
+                  <YAxis tickLine={false} axisLine={false} allowDecimals={false} fontSize={11} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="units" fill="var(--color-units)" radius={[4, 4, 0, 0]} name="Units" />
+                </BarChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Sales Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Sales Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end justify-between gap-3 h-48">
-            {sales.length === 0 ? (
-              <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">No sales data for this period.</div>
-            ) : (
-              sales.map((d) => (
-                <div key={d.period} className="flex flex-1 flex-col items-center gap-2">
-                  <div className="text-xs font-medium text-muted-foreground">{formatPrice(Number(d.amount))}</div>
-                  <div className="flex w-full items-end justify-center" style={{ height: "140px" }}>
-                    <div
-                      className="w-full max-w-[60px] rounded-t-md bg-primary transition-all hover:bg-primary/80"
-                      style={{ height: `${(Number(d.amount) / maxAmount) * 100}%` }}
-                    />
-                  </div>
-                  <div className="text-xs text-muted-foreground">{d.period}</div>
-                  <div className="text-xs font-medium">{d.order_count} orders</div>
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Top Products Bar Chart */}
+      {productBarData.length > 0 && (
+        <Card className="opacity-0-init animate-fade-in-up animation-delay-500">
+          <CardHeader>
+            <CardTitle>Top Products by Revenue</CardTitle>
+            <CardDescription>Best performing products this period</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={salesChartConfig} className="h-[250px] w-full">
+              <BarChart data={productBarData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} fontSize={11} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="sales" fill="var(--color-amount)" radius={[4, 4, 0, 0]} name="Gross Sales" />
+              </BarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Top Products */}
-      <Card>
+      {/* Top Products Table */}
+      <Card className="opacity-0-init animate-fade-in-up animation-delay-500">
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
             <Package className="size-4" /> Top Performing Products
           </CardTitle>
         </CardHeader>
@@ -248,20 +442,19 @@ export default function SellerAnalyticsPage() {
                 <TableHead>Revenue</TableHead>
                 <TableHead>Orders</TableHead>
                 <TableHead>Net Earnings</TableHead>
-                <TableHead>Units</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {products.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">No product data for this period.</TableCell>
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No product data for this period.</TableCell>
                 </TableRow>
               ) : (
                 products.map((p, idx) => (
-                  <TableRow key={p.id}>
+                  <TableRow key={p.id} className="transition-colors hover:bg-muted/30">
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        <span className="flex size-6 items-center justify-center rounded bg-muted text-xs font-bold text-muted-foreground">
+                        <span className="flex size-6 items-center justify-center rounded bg-primary/10 text-xs font-bold text-primary">
                           {idx + 1}
                         </span>
                         {p.name}
@@ -271,13 +464,7 @@ export default function SellerAnalyticsPage() {
                     <TableCell className="font-medium">{formatPrice(Number(p.gross_sales))}</TableCell>
                     <TableCell>{p.order_count}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{formatPrice(Number(p.net_earnings))}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-green-600">
-                        <ArrowUpRight className="size-4" />
-                        <span className="text-xs">{p.units} units</span>
-                      </div>
+                      <Badge variant="outline" className="text-green-600">{formatPrice(Number(p.net_earnings))}</Badge>
                     </TableCell>
                   </TableRow>
                 ))
@@ -286,40 +473,6 @@ export default function SellerAnalyticsPage() {
           </Table>
         </CardContent>
       </Card>
-
-      {/* Additional Metrics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Commission Paid</CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatPrice(Number(overview?.money.commission_revenue ?? 0))}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Platform commission</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Net Revenue</CardTitle>
-            <TrendingUp className="size-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatPrice(Number(overview?.money.seller_net_earnings ?? 0))}</div>
-            <p className="mt-1 text-xs text-muted-foreground">After commission</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Refund Rate</CardTitle>
-            <Star className="size-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{Number(overview?.refund_rate_percent ?? 0).toFixed(1)}%</div>
-            <p className="mt-1 text-xs text-muted-foreground">{overview?.counts.refunded_orders ?? 0} refunded orders</p>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }

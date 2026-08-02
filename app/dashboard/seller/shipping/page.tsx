@@ -40,7 +40,6 @@ import {
   MapPin,
   Plus,
   Pencil,
-  Trash2,
   Package,
   Search,
   Eye,
@@ -112,10 +111,7 @@ export default function SellerShippingPage() {
   const [search, setSearch] = React.useState("")
   const [zoneOpen, setZoneOpen] = React.useState(false)
   const [editZone, setEditZone] = React.useState<Zone | null>(null)
-  const [deleteZone, setDeleteZone] = React.useState<Zone | null>(null)
   const [methodOpen, setMethodOpen] = React.useState(false)
-  const [editMethod, setEditMethod] = React.useState<ShippingMethod | null>(null)
-  const [deleteMethod, setDeleteMethod] = React.useState<ShippingMethod | null>(null)
   const [actionLoading, setActionLoading] = React.useState(false)
 
   React.useEffect(() => {
@@ -174,65 +170,24 @@ export default function SellerShippingPage() {
     }
   }
 
-  const handleDeleteZone = async (id: string) => {
-    setActionLoading(true)
-    try {
-      await api.delete(`/shipping/zones/${id}`)
-      setZones((prev) => prev.filter((z) => z.id !== id))
-      setDeleteZone(null)
-      toast.add({ title: "Zone deleted", description: "Shipping zone has been removed.", type: "success" })
-    } catch (err) {
-      toast.add({ title: "Failed to delete zone", description: getApiError(err), type: "error" })
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleSaveMethod = async (data: { name: string; carrier: string; estimated_days: string; is_active: boolean }, id?: string) => {
+  const handleSaveMethod = async (data: { name: string; carrier: string; estimated_days: string; is_active: boolean }) => {
     setActionLoading(true)
     try {
       const [minDays, maxDays] = data.estimated_days.includes("-")
         ? data.estimated_days.split("-").map((d) => parseInt(d.trim()) || 1)
         : [1, parseInt(data.estimated_days) || 7]
-      if (id) {
-        const updated = await api.patch<ShippingMethod>(`/shipping/methods/${id}`, {
-          name: data.name,
-          carrier_name: data.carrier,
-          min_delivery_days: minDays,
-          max_delivery_days: maxDays,
-          is_active: data.is_active,
-        })
-        setMethods((prev) => prev.map((m) => (m.id === id ? updated : m)))
-        setEditMethod(null)
-        toast.add({ title: "Method updated!", description: `${data.name} has been updated.`, type: "success" })
-      } else {
-        const created = await api.post<ShippingMethod>("/shipping/methods", {
-          name: data.name,
-          carrier_name: data.carrier,
-          min_delivery_days: minDays,
-          max_delivery_days: maxDays,
-          is_active: data.is_active,
-        })
-        setMethods((prev) => [...prev, created])
-        setMethodOpen(false)
-        toast.add({ title: "Method created!", description: `${data.name} has been added.`, type: "success" })
-      }
+      const created = await api.post<ShippingMethod>("/shipping/methods", {
+        name: data.name,
+        carrier_name: data.carrier,
+        min_delivery_days: minDays,
+        max_delivery_days: maxDays,
+        is_active: data.is_active,
+      })
+      setMethods((prev) => [...prev, created])
+      setMethodOpen(false)
+      toast.add({ title: "Method created!", description: `${data.name} has been added.`, type: "success" })
     } catch (err) {
       toast.add({ title: "Failed to save method", description: getApiError(err), type: "error" })
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleDeleteMethod = async (id: string) => {
-    setActionLoading(true)
-    try {
-      await api.delete(`/shipping/methods/${id}`)
-      setMethods((prev) => prev.filter((m) => m.id !== id))
-      setDeleteMethod(null)
-      toast.add({ title: "Method deleted", description: "Shipping method has been removed.", type: "success" })
-    } catch (err) {
-      toast.add({ title: "Failed to delete method", description: getApiError(err), type: "error" })
     } finally {
       setActionLoading(false)
     }
@@ -282,9 +237,6 @@ export default function SellerShippingPage() {
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon-sm" disabled={actionLoading} onClick={() => setEditZone(zone)}>
                       <Pencil className="size-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon-sm" disabled={actionLoading} onClick={() => setDeleteZone(zone)} className="text-red-500">
-                      <Trash2 className="size-4" />
                     </Button>
                   </div>
                 </div>
@@ -336,16 +288,7 @@ export default function SellerShippingPage() {
                       {method.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon-sm" disabled={actionLoading} onClick={() => setEditMethod(method)}>
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon-sm" disabled={actionLoading} onClick={() => setDeleteMethod(method)} className="text-red-500">
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground text-xs">—</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -414,45 +357,6 @@ export default function SellerShippingPage() {
           {editZone && <ZoneForm zone={editZone} onSubmit={(data) => handleSaveZone(data, editZone.id)} />}
         </DialogContent>
       </Dialog>
-
-      {/* Zone Delete Dialog */}
-      <Dialog open={!!deleteZone} onOpenChange={(open) => !open && setDeleteZone(null)}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Delete Zone?</DialogTitle>
-            <DialogDescription>Remove <strong>{deleteZone?.name}</strong>? Shipping methods linked to this zone may be affected.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button variant="destructive" disabled={actionLoading} onClick={() => deleteZone && handleDeleteZone(deleteZone.id)}>
-              <Trash2 className="size-4" /> Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Method Edit Dialog */}
-      <Dialog open={!!editMethod} onOpenChange={(open) => !open && setEditMethod(null)}>
-        <DialogContent className="sm:max-w-[480px]">
-          {editMethod && <MethodForm method={editMethod} onSubmit={(data) => handleSaveMethod(data, editMethod.id)} />}
-        </DialogContent>
-      </Dialog>
-
-      {/* Method Delete Dialog */}
-      <Dialog open={!!deleteMethod} onOpenChange={(open) => !open && setDeleteMethod(null)}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Delete Method?</DialogTitle>
-            <DialogDescription>Remove <strong>{deleteMethod?.name}</strong>? This cannot be undone.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button variant="destructive" disabled={actionLoading} onClick={() => deleteMethod && handleDeleteMethod(deleteMethod.id)}>
-              <Trash2 className="size-4" /> Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
@@ -508,16 +412,14 @@ function ZoneForm({
 }
 
 function MethodForm({
-  method,
   onSubmit,
 }: {
-  method?: ShippingMethod
-  onSubmit: (data: { name: string; carrier: string; estimated_days: string; is_active: boolean }, id?: string) => void
+  onSubmit: (data: { name: string; carrier: string; estimated_days: string; is_active: boolean }) => void
 }) {
-  const [name, setName] = React.useState(method?.name ?? "")
-  const [carrier, setCarrier] = React.useState(method?.carrier_name ?? "")
-  const [estimatedDays, setEstimatedDays] = React.useState(method ? `${method.min_delivery_days}-${method.max_delivery_days} days` : "")
-  const [isActive, setIsActive] = React.useState(method?.is_active ?? true)
+  const [name, setName] = React.useState("")
+  const [carrier, setCarrier] = React.useState("")
+  const [estimatedDays, setEstimatedDays] = React.useState("")
+  const [isActive, setIsActive] = React.useState(true)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -528,7 +430,7 @@ function MethodForm({
   return (
     <form onSubmit={handleSubmit}>
       <DialogHeader>
-        <DialogTitle>{method ? "Edit Method" : "Add Shipping Method"}</DialogTitle>
+        <DialogTitle>Add Shipping Method</DialogTitle>
         <DialogDescription>Configure a delivery method with carrier and timing.</DialogDescription>
       </DialogHeader>
       <FieldGroup>
@@ -553,7 +455,7 @@ function MethodForm({
       </FieldGroup>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-        <Button type="submit">{method ? "Save Changes" : "Add Method"}</Button>
+        <Button type="submit">Add Method</Button>
       </DialogFooter>
     </form>
   )

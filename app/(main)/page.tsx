@@ -8,7 +8,7 @@ import {
   X,
   Package,
 } from "lucide-react"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ProductCard } from "@/components/product-card"
 import { cn } from "@/lib/utils"
@@ -274,28 +274,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Newsletter */}
-      <section className="border-t bg-muted/30">
-        <div className="mx-auto max-w-7xl px-4 py-10">
-          <div className="flex flex-col items-center gap-3 text-center">
-            <h2 className="text-xl font-bold tracking-tight md:text-2xl">
-              Stay in the Loop
-            </h2>
-            <p className="max-w-md text-sm text-muted-foreground">
-              Subscribe to get exclusive deals, new arrivals, and special offers
-              delivered to your inbox.
-            </p>
-            <div className="flex w-full max-w-sm flex-col gap-2 sm:flex-row">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              />
-              <Button size="lg">Subscribe</Button>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   )
 }

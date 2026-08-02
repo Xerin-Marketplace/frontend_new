@@ -29,16 +29,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/toast"
 import {
   User,
-  Bell,
   Shield,
   Lock,
   Save,
-  Trash2,
-  Mail,
-  MessageSquare,
-  Package,
-  Tag,
-  AlertTriangle,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
@@ -65,7 +58,6 @@ export default function UserSettingsPage() {
   const [saving, setSaving] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [passwordOpen, setPasswordOpen] = React.useState(false)
-  const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [profile, setProfile] = React.useState<UserProfile | null>(null)
 
   React.useEffect(() => {
@@ -111,28 +103,6 @@ export default function UserSettingsPage() {
       toast.add({ title: "Failed to change password", description: getApiError(err), type: "error" })
     }
   }
-
-  const [prefs, setPrefs] = React.useState<Record<string, boolean>>({
-    order_updates: true,
-    promotions: true,
-    price_drops: false,
-    seller_messages: true,
-    newsletter: false,
-    new_arrivals: true,
-  })
-
-  const togglePref = (key: string) => {
-    setPrefs((prev) => ({ ...prev, [key]: !prev[key] }))
-  }
-
-  const notificationItems: { key: string; label: string; desc: string; icon: React.ReactNode }[] = [
-    { key: "order_updates", label: "Order Updates", desc: "Notifications about your order status", icon: <Package className="size-4" /> },
-    { key: "promotions", label: "Promotions & Deals", desc: "Special offers and discount notifications", icon: <Tag className="size-4" /> },
-    { key: "price_drops", label: "Price Drop Alerts", desc: "Get notified when wishlist items go on sale", icon: <Bell className="size-4" /> },
-    { key: "seller_messages", label: "Seller Messages", desc: "Messages from sellers about your orders", icon: <MessageSquare className="size-4" /> },
-    { key: "newsletter", label: "Newsletter", desc: "Weekly digest of trending products", icon: <Mail className="size-4" /> },
-    { key: "new_arrivals", label: "New Arrivals", desc: "Notifications about new products", icon: <Bell className="size-4" /> },
-  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -206,43 +176,6 @@ export default function UserSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Notification Preferences */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Bell className="size-4" /> Notification Preferences
-            </CardTitle>
-            <Button variant="outline" size="sm" onClick={() => toast.add({ title: "Preferences saved!", description: "Notification settings updated.", type: "success" })}>
-              <Save className="size-4" /> Save
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-1">
-            {notificationItems.map((item) => (
-              <div key={item.key} className="flex items-center justify-between rounded-lg border p-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                    {item.icon}
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium">{item.label}</div>
-                    <div className="text-xs text-muted-foreground">{item.desc}</div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => togglePref(item.key)}
-                  className={`relative h-6 w-11 rounded-full transition-colors ${prefs[item.key] ? "bg-primary" : "bg-muted"}`}
-                >
-                  <span className={`absolute top-0.5 size-5 rounded-full bg-background shadow transition-transform ${prefs[item.key] ? "translate-x-5" : "translate-x-0.5"}`} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Security */}
       <Card>
         <CardHeader>
@@ -266,38 +199,6 @@ export default function UserSettingsPage() {
                 Change Password
               </Button>
             </div>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                  <Shield className="size-4 text-muted-foreground" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium">Two-Factor Authentication</div>
-                  <div className="text-xs text-muted-foreground">Add an extra layer of security</div>
-                </div>
-              </div>
-              <Button variant="outline" size="sm">Enable 2FA</Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Danger Zone */}
-      <Card className="border-red-200">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2 text-red-600">
-            <AlertTriangle className="size-4" /> Danger Zone
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-4">
-            <div>
-              <div className="text-sm font-medium text-red-700">Delete Account</div>
-              <div className="text-xs text-red-600">Permanently delete your account and all data. This cannot be undone.</div>
-            </div>
-            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="size-4" /> Delete
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -306,24 +207,6 @@ export default function UserSettingsPage() {
       <Dialog open={passwordOpen} onOpenChange={setPasswordOpen}>
         <DialogContent className="sm:max-w-[440px]">
           <PasswordForm onSubmit={handleChangePassword} />
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Account Dialog */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Delete Account?</DialogTitle>
-            <DialogDescription>
-              This will permanently delete your account, orders, reviews, and all associated data. <strong>This action cannot be undone.</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button variant="destructive" onClick={() => { setDeleteOpen(false); toast.add({ title: "Account deletion requested", description: "Contact support to complete deletion.", type: "success" }) }}>
-              <Trash2 className="size-4" /> Delete Permanently
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

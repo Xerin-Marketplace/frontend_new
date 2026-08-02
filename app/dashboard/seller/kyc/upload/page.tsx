@@ -1,5 +1,5 @@
-import { PlaceholderPage } from "@/components/placeholder-page"
+import { redirect } from "next/navigation"
 
 export default function SellerKYCUploadPage() {
-  return <PlaceholderPage title="Upload Documents" description="Upload your KYC documents for verification. Supported formats: PDF, JPG, PNG." />
+  redirect("/dashboard/seller/kyc")
 }

@@ -15,6 +15,7 @@ import {
   CreditCard,
   Truck,
   Shield,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react"
 
@@ -56,6 +57,7 @@ const userData = {
       isActive: true,
       items: [
         { title: "Overview", url: "/dashboard/user" },
+        { title: "Analytics", url: "/dashboard/user/analytics" },
         { title: "Spending", url: "/dashboard/user/spending" },
         { title: "Activity", url: "/dashboard/user/activity" },
       ],

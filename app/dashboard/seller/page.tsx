@@ -294,8 +294,8 @@ export default function SellerDashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
+        {stats.map((stat, i) => (
+          <Card key={stat.title} className={`opacity-0-init animate-fade-in-up animation-delay-${i * 100}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 {stat.title}
@@ -303,7 +303,7 @@ export default function SellerDashboardPage() {
               <stat.icon className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+              <div className="text-2xl font-bold animate-count-up">{stat.value}</div>
               <div className="flex items-center gap-1 text-xs">
                 {stat.trend === "up" ? (
                   <ArrowUpRight className="size-3 text-green-500" />
@@ -322,7 +322,7 @@ export default function SellerDashboardPage() {
 
       {/* Revenue Area Chart + Top Products */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="lg:col-span-4">
+        <Card className="lg:col-span-4 opacity-0-init animate-fade-in-scale animation-delay-500">
           <CardHeader>
             <CardTitle>Revenue Overview</CardTitle>
             <CardDescription>Daily revenue for the last 30 days</CardDescription>
@@ -371,7 +371,7 @@ export default function SellerDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-3">
+        <Card className="lg:col-span-3 opacity-0-init animate-fade-in-scale animation-delay-700">
           <CardHeader>
             <CardTitle>Top Products</CardTitle>
             <CardDescription>Best performing products (30d)</CardDescription>

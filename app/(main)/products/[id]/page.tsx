@@ -5,8 +5,6 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
   ShoppingCart,
-  Heart,
-  Share2,
   Truck,
   ShieldCheck,
   RotateCcw,
@@ -251,13 +249,6 @@ export default function ProductDetailPage() {
             <Button size="lg" className="flex-1 gap-2" onClick={handleAddToCart} disabled={adding || !product.is_active}>
               <ShoppingCart className="size-5" />
               {adding ? "Adding..." : "Add to Cart"}
-            </Button>
-            <Button variant="outline" size="lg" className="gap-2">
-              <Heart className="size-5" />
-              Wishlist
-            </Button>
-            <Button variant="ghost" size="icon-lg">
-              <Share2 className="size-5" />
             </Button>
           </div>
 

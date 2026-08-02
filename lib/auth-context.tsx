@@ -64,6 +64,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = React.useCallback(async (email: string, password: string) => {
+    // Clear any stale tokens before attempting login
+    removeTokens()
     const res = await api.post<{
       access_token: string
       refresh_token: string

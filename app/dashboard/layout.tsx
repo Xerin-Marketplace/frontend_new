@@ -15,10 +15,11 @@ import { SellerSidebar } from "@/components/seller-sidebar"
 import { UserSidebar } from "@/components/user-sidebar"
 import { AdminSidebar } from "@/components/admin-sidebar"
 import { usePathname, useRouter } from "next/navigation"
-import { Toaster } from "@/components/ui/toast"
+import { Toaster, toast } from "@/components/ui/toast"
 import { useAuth } from "@/lib/auth-context"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ModeToggle } from "@/components/mode-toggle"
+import { Shield } from "lucide-react"
 
 const pageTitles: Record<string, string> = {
   // Seller
@@ -103,11 +104,38 @@ export default function DashboardLayout({
   const section = isAdmin ? "Admin Panel" : isSeller ? "Seller Center" : "My Account"
   const pageTitle = pageTitles[pathname] ?? "Dashboard"
 
+  // Role-based access control
+  const userAccountType = user?.account_type
+  const isAdminUser = userAccountType === "admin" || userAccountType === "super_admin"
+  const isSellerUser = user?.is_seller === true || userAccountType === "seller"
+
   useEffect(() => {
     if (!loading && !user) {
       router.push("/auth?tab=login")
+      return
     }
-  }, [loading, user, router])
+    // Redirect if user doesn't have the right role for this section
+    if (!loading && user) {
+      if (isAdmin && !isAdminUser) {
+        toast.add({
+          title: "Access denied",
+          description: "You don't have permission to access the admin panel.",
+          type: "error",
+        })
+        router.push("/dashboard/user")
+        return
+      }
+      if (isSeller && !isSellerUser && !isAdminUser) {
+        toast.add({
+          title: "Access denied",
+          description: "You need a seller account to access the seller center.",
+          type: "error",
+        })
+        router.push("/dashboard/user")
+        return
+      }
+    }
+  }, [loading, user, router, isAdmin, isSeller, isAdminUser, isSellerUser])
 
   if (loading || !user) {
     return (
@@ -116,6 +144,30 @@ export default function DashboardLayout({
           <Skeleton className="size-12 rounded-xl" />
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-3 w-48" />
+        </div>
+      </div>
+    )
+  }
+
+  // Block rendering if user doesn't have the right role
+  if (isAdmin && !isAdminUser) {
+    return (
+      <div className="flex h-svh items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <Shield className="size-12 text-muted-foreground" />
+          <p className="text-lg font-semibold">Access Denied</p>
+          <p className="text-sm text-muted-foreground">You don&apos;t have permission to access this page.</p>
+        </div>
+      </div>
+    )
+  }
+  if (isSeller && !isSellerUser && !isAdminUser) {
+    return (
+      <div className="flex h-svh items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <Shield className="size-12 text-muted-foreground" />
+          <p className="text-lg font-semibold">Seller Account Required</p>
+          <p className="text-sm text-muted-foreground">You need a seller account to access this page.</p>
         </div>
       </div>
     )

@@ -55,6 +55,22 @@ function AuthFormInner({
   )
   const [showPassword, setShowPassword] = useState(false)
 
+  // Show toast if redirected due to session expiry
+  useEffect(() => {
+    const reason = searchParams.get("reason")
+    if (reason === "session_expired") {
+      toast.add({
+        title: "Session expired",
+        description: "Your session has expired. Please sign in again to continue.",
+        type: "warning",
+      })
+      // Clean the URL param so it doesn't show again on refresh
+      const newUrl = new URL(window.location.href)
+      newUrl.searchParams.delete("reason")
+      window.history.replaceState({}, "", newUrl.toString())
+    }
+  }, [searchParams])
+
   // OTP state
   const [otpPhone, setOtpPhone] = useState("")
   const [otpEmail, setOtpEmail] = useState("")

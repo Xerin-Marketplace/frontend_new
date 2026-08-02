@@ -62,6 +62,12 @@ async function refreshAccessToken(): Promise<boolean> {
   }
 }
 
+const AUTH_PATHS = ["/auth/login", "/auth/register", "/auth/register-seller", "/auth/forgot-password", "/auth/reset-password", "/auth/send-otp", "/auth/verify-otp"]
+
+function isAuthPath(path: string): boolean {
+  return AUTH_PATHS.some((p) => path === p || path.startsWith(p))
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -72,7 +78,8 @@ async function request<T>(
     "Content-Type": "application/json",
     ...((options.headers as Record<string, string>) || {}),
   }
-  if (token) {
+  // Don't send stale tokens on auth endpoints (login, register, etc.)
+  if (token && !isAuthPath(path)) {
     headers["Authorization"] = `Bearer ${token}`
   }
 
@@ -95,15 +102,32 @@ async function request<T>(
   }
 
   if (res.status === 401 && retry) {
+    // Don't attempt refresh or redirect for auth endpoints — they don't need a token
+    if (isAuthPath(path)) {
+      let detail = "Invalid credentials"
+      try {
+        const body = await res.json()
+        detail = body?.detail || body?.message || detail
+      } catch {
+        // no body
+      }
+      throw { status: 401, detail } as ApiError
+    }
+
     const refreshed = await refreshAccessToken()
     if (refreshed) {
       return request<T>(path, options, false)
     }
     removeTokens()
     if (typeof window !== "undefined") {
-      window.location.href = "/auth?tab=login"
+      // Don't redirect if already on an auth page — just throw the error
+      const onAuthPage = window.location.pathname.startsWith("/auth") || window.location.pathname.startsWith("/(auth)")
+      if (!onAuthPage) {
+        // Use soft redirect via state instead of hard navigation
+        window.location.href = "/auth?tab=login&reason=session_expired"
+      }
     }
-    throw { status: 401, detail: "Session expired" } as ApiError
+    throw { status: 401, detail: "Session expired. Please sign in again." } as ApiError
   }
 
   if (!res.ok) {

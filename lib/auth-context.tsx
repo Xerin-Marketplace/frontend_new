@@ -7,6 +7,7 @@ import {
   removeTokens,
   getUserData,
   setUserData,
+  isTokenExpired,
   api,
   type ApiError,
 } from "@/lib/api"
@@ -31,6 +32,10 @@ type AuthContextValue = {
   loading: boolean
   isAuthenticated: boolean
   isSeller: boolean
+  isAdmin: boolean
+  isSuperAdmin: boolean
+  hasPermission: (permission: string) => boolean
+  hasRole: (role: string) => boolean
   login: (email: string, password: string) => Promise<AuthUser>
   register: (data: {
     first_name: string
@@ -50,41 +55,107 @@ type AuthContextValue = {
 
 const AuthContext = React.createContext<AuthContextValue | null>(null)
 
+// Session check interval (check token expiry every 60 seconds)
+const SESSION_CHECK_INTERVAL = 60000
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<AuthUser | null>(null)
   const [loading, setLoading] = React.useState(true)
 
+  // Initialize from stored data
   React.useEffect(() => {
     const stored = getUserData()
     const token = getToken("access")
-    if (stored && token) {
+    if (stored && token && !isTokenExpired()) {
       setUser(stored as AuthUser)
+    } else if (token && isTokenExpired()) {
+      // Try to refresh on mount if token is expired
+      removeTokens()
     }
     setLoading(false)
+  }, [])
+
+  // Proactive session check — detect expired tokens and refresh
+  React.useEffect(() => {
+    if (!user) return
+
+    const checkSession = () => {
+      const token = getToken("access")
+      if (!token) {
+        setUser(null)
+        return
+      }
+      if (isTokenExpired()) {
+        // Token expired — will be refreshed on next API call
+        // But if no refresh token, clear session
+        if (!getToken("refresh")) {
+          removeTokens()
+          setUser(null)
+        }
+      }
+    }
+
+    const interval = setInterval(checkSession, SESSION_CHECK_INTERVAL)
+
+    // Also check on window focus (user returning to tab)
+    const onFocus = () => checkSession()
+    window.addEventListener("focus", onFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("focus", onFocus)
+    }
+  }, [user])
+
+  // Cross-tab sync — logout in one tab logs out everywhere
+  React.useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "access_token" && !e.newValue) {
+        setUser(null)
+      }
+      if (e.key === "user_data" && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue)
+          setUser(data as AuthUser)
+        } catch {
+          // ignore
+        }
+      }
+    }
+    window.addEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
   }, [])
 
   const login = React.useCallback(async (email: string, password: string) => {
     // Clear any stale tokens before attempting login
     removeTokens()
-    const res = await api.post<{
-      access_token: string
-      refresh_token: string
-      token_type: string
-      user: AuthUser
-    }>("/auth/login", { email, password })
+    try {
+      const res = await api.post<{
+        access_token: string
+        refresh_token: string
+        token_type: string
+        user: AuthUser
+      }>("/auth/login", { email, password })
 
-    setToken("access", res.access_token)
-    setToken("refresh", res.refresh_token)
-    if (res.user) {
-      setUserData(res.user as Record<string, unknown>)
-      setUser(res.user)
-      return res.user
+      setToken("access", res.access_token)
+      setToken("refresh", res.refresh_token)
+      if (res.user) {
+        setUserData(res.user as Record<string, unknown>)
+        setUser(res.user)
+        return res.user
+      }
+      // If backend doesn't return user in token response, fetch it
+      const me = await api.get<AuthUser>("/users/me")
+      setUserData(me as Record<string, unknown>)
+      setUser(me)
+      return me
+    } catch (err) {
+      const apiErr = err as ApiError
+      // Clear any partial state on login failure
+      removeTokens()
+      setUser(null)
+      throw apiErr
     }
-    // If backend doesn't return user in token response, fetch it
-    const me = await api.get<AuthUser>("/users/me")
-    setUserData(me as Record<string, unknown>)
-    setUser(me)
-    return me
   }, [])
 
   const register = React.useCallback(
@@ -107,12 +178,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   )
 
-  const sendOtp = React.useCallback(
-    async (phone: string) => {
-      await api.post("/auth/send-otp", { phone })
-    },
-    []
-  )
+  const sendOtp = React.useCallback(async (phone: string) => {
+    await api.post("/auth/send-otp", { phone })
+  }, [])
 
   const verifyOtp = React.useCallback(
     async (phone: string, otpCode: string) => {
@@ -121,16 +189,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   )
 
-  const forgotPassword = React.useCallback(
-    async (email: string) => {
-      await api.post("/auth/forgot-password", { email })
-    },
-    []
-  )
+  const forgotPassword = React.useCallback(async (email: string) => {
+    await api.post("/auth/forgot-password", { email })
+  }, [])
 
   const resetPassword = React.useCallback(
     async (email: string, otpCode: string, newPassword: string) => {
-      await api.post("/auth/reset-password", { email, otp_code: otpCode, new_password: newPassword })
+      await api.post("/auth/reset-password", {
+        email,
+        otp_code: otpCode,
+        new_password: newPassword,
+      })
     },
     []
   )
@@ -153,17 +222,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const me = await api.get<AuthUser>("/users/me")
       setUserData(me as Record<string, unknown>)
       setUser(me)
-    } catch {
-      // keep existing user data
+    } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr.status === 401) {
+        // Session is invalid — clear everything
+        removeTokens()
+        setUser(null)
+      }
+      // For other errors, keep existing user data
     }
   }, [])
+
+  // Derived role checks
+  const isAdmin = React.useMemo(
+    () => user?.account_type === "admin" || user?.account_type === "super_admin",
+    [user]
+  )
+  const isSuperAdmin = React.useMemo(
+    () => user?.account_type === "super_admin",
+    [user]
+  )
+  const isSeller = React.useMemo(
+    () => user?.account_type === "seller" || user?.is_seller === true,
+    [user]
+  )
+
+  const hasPermission = React.useCallback(
+    (permission: string): boolean => {
+      if (!user?.permissions) return false
+      return user.permissions.includes(permission)
+    },
+    [user]
+  )
+
+  const hasRole = React.useCallback(
+    (role: string): boolean => {
+      if (!user?.roles) return false
+      return user.roles.includes(role)
+    },
+    [user]
+  )
 
   const value = React.useMemo<AuthContextValue>(
     () => ({
       user,
       loading,
       isAuthenticated: !!user,
-      isSeller: user?.account_type === "seller" || user?.is_seller === true,
+      isSeller,
+      isAdmin,
+      isSuperAdmin,
+      hasPermission,
+      hasRole,
       login,
       register,
       registerSeller,
@@ -174,7 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       refreshUser,
     }),
-    [user, loading, login, register, registerSeller, sendOtp, verifyOtp, forgotPassword, resetPassword, logout, refreshUser]
+    [user, loading, isSeller, isAdmin, isSuperAdmin, hasPermission, hasRole, login, register, registerSeller, sendOtp, verifyOtp, forgotPassword, resetPassword, logout, refreshUser]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

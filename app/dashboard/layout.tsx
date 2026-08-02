@@ -98,45 +98,46 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user, loading, isAdmin: isAdminUser, isSeller: isSellerUser } = useAuth()
   const isSeller = pathname.startsWith("/dashboard/seller")
   const isAdmin = pathname.startsWith("/dashboard/admin")
   const section = isAdmin ? "Admin Panel" : isSeller ? "Seller Center" : "My Account"
   const pageTitle = pageTitles[pathname] ?? "Dashboard"
 
-  // Role-based access control
-  const userAccountType = user?.account_type
-  const isAdminUser = userAccountType === "admin" || userAccountType === "super_admin"
-  const isSellerUser = user?.is_seller === true || userAccountType === "seller"
+  // Role-based access control with proper checks
+  const canAccessAdmin = isAdminUser
+  const canAccessSeller = isSellerUser || isAdminUser // Admins can access seller dashboard
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return
+
+    if (!user) {
       router.push("/auth?tab=login")
       return
     }
-    // Redirect if user doesn't have the right role for this section
-    if (!loading && user) {
-      if (isAdmin && !isAdminUser) {
-        toast.add({
-          title: "Access denied",
-          description: "You don't have permission to access the admin panel.",
-          type: "error",
-        })
-        router.push("/dashboard/user")
-        return
-      }
-      if (isSeller && !isSellerUser && !isAdminUser) {
-        toast.add({
-          title: "Access denied",
-          description: "You need a seller account to access the seller center.",
-          type: "error",
-        })
-        router.push("/dashboard/user")
-        return
-      }
-    }
-  }, [loading, user, router, isAdmin, isSeller, isAdminUser, isSellerUser])
 
+    // Redirect if user doesn't have the right role for this section
+    if (isAdmin && !canAccessAdmin) {
+      toast.add({
+        title: "Access denied",
+        description: "You don't have permission to access the admin panel.",
+        type: "error",
+      })
+      router.push("/dashboard/user")
+      return
+    }
+    if (isSeller && !canAccessSeller) {
+      toast.add({
+        title: "Access denied",
+        description: "You need a seller account to access the seller center.",
+        type: "error",
+      })
+      router.push("/dashboard/user")
+      return
+    }
+  }, [loading, user, router, isAdmin, isSeller, canAccessAdmin, canAccessSeller])
+
+  // Loading skeleton
   if (loading || !user) {
     return (
       <div className="flex h-svh items-center justify-center">
@@ -149,8 +150,8 @@ export default function DashboardLayout({
     )
   }
 
-  // Block rendering if user doesn't have the right role
-  if (isAdmin && !isAdminUser) {
+  // Block rendering if user doesn't have the right role (defense in depth)
+  if (isAdmin && !canAccessAdmin) {
     return (
       <div className="flex h-svh items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center">
@@ -161,7 +162,7 @@ export default function DashboardLayout({
       </div>
     )
   }
-  if (isSeller && !isSellerUser && !isAdminUser) {
+  if (isSeller && !canAccessSeller) {
     return (
       <div className="flex h-svh items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center">

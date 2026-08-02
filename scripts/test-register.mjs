@@ -6,7 +6,7 @@
  * so you can see exactly what the backend returns.
  */
 
-const API_URL = "https://api.xerinmarketplace.com/api/v1"
+const API_URL = "http://localhost:8001/api/v1"
 
 // Test data — change these values as needed
 const testData = {
@@ -29,6 +29,7 @@ async function main() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(testData),
+      signal: AbortSignal.timeout(15000),
     })
 
     console.log(`Status: ${res.status} ${res.statusText}`)

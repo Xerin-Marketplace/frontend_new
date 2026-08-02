@@ -2,7 +2,7 @@
 
 import { AuthForm } from "@/components/auth-form"
 import { Toaster } from "@/components/ui/toast"
-import { ShieldCheck, Truck, TrendingUp } from "lucide-react"
+import { ShieldCheck, Truck, TrendingUp, Wallet, Users, Star } from "lucide-react"
 
 export default function AuthPage() {
   return (
@@ -25,8 +25,14 @@ export default function AuthPage() {
             <AuthForm />
           </div>
         </div>
-        <div className="text-center text-xs text-muted-foreground">
-          &copy; {new Date().getFullYear()} XerinMarket. All rights reserved.
+        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+          <a href="/help" className="hover:text-foreground">Help Center</a>
+          <span className="size-1 rounded-full bg-muted-foreground/30" />
+          <a href="/terms" className="hover:text-foreground">Terms</a>
+          <span className="size-1 rounded-full bg-muted-foreground/30" />
+          <a href="/privacy" className="hover:text-foreground">Privacy</a>
+          <span className="size-1 rounded-full bg-muted-foreground/30" />
+          <span>&copy; {new Date().getFullYear()} XerinMarket</span>
         </div>
       </div>
 
@@ -90,6 +96,17 @@ export default function AuthPage() {
             </div>
             <div className="flex items-start gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/10 backdrop-blur">
+                <Wallet className="size-5 text-white" />
+              </div>
+              <div>
+                <p className="font-medium">Seller Wallet</p>
+                <p className="text-sm text-zinc-400">
+                  Fast payouts to bank or mobile money
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/10 backdrop-blur">
                 <TrendingUp className="size-5 text-white" />
               </div>
               <div>
@@ -102,12 +119,20 @@ export default function AuthPage() {
           </div>
         </div>
 
-        <div className="relative flex items-center gap-6 text-sm text-zinc-400">
-          <span>10k+ Sellers</span>
-          <span className="size-1 rounded-full bg-zinc-600" />
-          <span>100k+ Products</span>
-          <span className="size-1 rounded-full bg-zinc-600" />
-          <span>1M+ Orders</span>
+        <div className="relative flex flex-col gap-4">
+          <div className="flex items-center gap-6 text-sm text-zinc-400">
+            <div className="flex items-center gap-1.5">
+              <Users className="size-4" />
+              <span>10k+ Sellers</span>
+            </div>
+            <span className="size-1 rounded-full bg-zinc-600" />
+            <div className="flex items-center gap-1.5">
+              <Star className="size-4 fill-yellow-400 text-yellow-400" />
+              <span>4.8 Rating</span>
+            </div>
+            <span className="size-1 rounded-full bg-zinc-600" />
+            <span>1M+ Orders</span>
+          </div>
         </div>
       </div>
     </div>

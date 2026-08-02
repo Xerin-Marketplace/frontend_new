@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Mail, Lock, ShieldCheck, ArrowLeft, Loader2, Eye, EyeOff } from "lucide-react"
 import { useAuth, type ApiError } from "@/lib/auth-context"
+import { PasswordStrength } from "@/components/password-strength"
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -288,7 +289,7 @@ export default function ForgotPasswordPage() {
                       {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
                   </div>
-                  <FieldDescription>At least 8 characters with 1 uppercase letter and 1 number.</FieldDescription>
+                  <PasswordStrength password={newPassword} className="mt-2" />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="confirm-password">Confirm Password</FieldLabel>

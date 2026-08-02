@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Tag,
   Truck,
+  ShieldCheck,
 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,69 +19,43 @@ import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-import { api, type ApiError } from "@/lib/api"
 import { toast } from "@/components/ui/toast"
-import { formatPrice, type ApiProduct } from "@/lib/store-types"
-import { useAuth } from "@/lib/auth-context"
+import { formatPrice } from "@/lib/store-types"
+import { useCart } from "@/lib/cart-context"
+import { type ApiError } from "@/lib/api"
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
   return e?.detail || "Something went wrong. Please try again."
 }
 
-type CartItem = {
-  id: string
-  product_id: string
-  quantity: number
-  product: ApiProduct
-  unit_price: number
-  total_price: number
-}
-
-type CartResponse = {
-  id: string
-  items: CartItem[]
-  subtotal: number
-  discount: number
-  shipping_cost: number
-  total: number
-  coupon_code: string | null
-}
-
 export default function CartPage() {
   const router = useRouter()
-  const { isAuthenticated } = useAuth()
-  const [cart, setCart] = useState<CartResponse | null>(null)
-  const [loading, setLoading] = useState(true)
+  const {
+    items,
+    count,
+    subtotal,
+    discount,
+    shippingCost,
+    total,
+    couponCode,
+    loading,
+    isGuest,
+    updateQuantity,
+    removeItem,
+    applyCoupon,
+    removeCoupon,
+  } = useCart()
   const [coupon, setCoupon] = useState("")
   const [updating, setUpdating] = useState<string | null>(null)
 
-  const fetchCart = useCallback(() => {
-    setLoading(true)
-    api.get<CartResponse>("/cart")
-      .then(setCart)
-      .catch((err) => {
-        toast.add({ title: "Failed to load cart", description: getApiError(err), type: "error" })
-      })
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchCart()
-    } else {
-      setLoading(false)
-    }
-  }, [isAuthenticated, fetchCart])
-
-  const updateQty = async (itemId: string, delta: number) => {
-    const item = cart?.items.find((i) => i.id === itemId)
+  const handleUpdateQty = async (itemId: string, delta: number) => {
+    const item = items.find((i) => i.id === itemId)
     if (!item) return
     const newQty = Math.max(1, item.quantity + delta)
     setUpdating(itemId)
     try {
-      await api.patch(`/cart/items/${itemId}`, { quantity: newQty })
-      fetchCart()
+      await updateQuantity(itemId, newQty)
     } catch (err) {
       toast.add({ title: "Failed to update", description: getApiError(err), type: "error" })
     } finally {
@@ -88,12 +63,11 @@ export default function CartPage() {
     }
   }
 
-  const removeItem = async (itemId: string) => {
+  const handleRemove = async (itemId: string) => {
     setUpdating(itemId)
     try {
-      await api.delete(`/cart/items/${itemId}`)
+      await removeItem(itemId)
       toast.add({ title: "Item removed", type: "success" })
-      fetchCart()
     } catch (err) {
       toast.add({ title: "Failed to remove", description: getApiError(err), type: "error" })
     } finally {
@@ -101,40 +75,24 @@ export default function CartPage() {
     }
   }
 
-  const applyCoupon = async () => {
+  const handleApplyCoupon = async () => {
     if (!coupon.trim()) return
     try {
-      await api.post("/cart/apply-coupon", { coupon_code: coupon.trim() })
+      await applyCoupon(coupon.trim())
       toast.add({ title: "Coupon applied!", type: "success" })
-      fetchCart()
+      setCoupon("")
     } catch (err) {
       toast.add({ title: "Failed to apply coupon", description: getApiError(err), type: "error" })
     }
   }
 
-  const removeCoupon = async () => {
+  const handleRemoveCoupon = async () => {
     try {
-      await api.delete("/cart/coupon")
+      await removeCoupon()
       toast.add({ title: "Coupon removed", type: "success" })
-      fetchCart()
     } catch (err) {
       toast.add({ title: "Failed to remove coupon", description: getApiError(err), type: "error" })
     }
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-6 px-4 py-20 text-center">
-        <div className="flex size-20 items-center justify-center rounded-full bg-muted">
-          <ShoppingBag className="size-10 text-muted-foreground" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Please sign in</h1>
-          <p className="mt-2 text-muted-foreground">Sign in to view your shopping cart</p>
-        </div>
-        <Link href="/auth" className={buttonVariants({ size: "lg" })}>Sign In</Link>
-      </div>
-    )
   }
 
   if (loading) {
@@ -153,7 +111,7 @@ export default function CartPage() {
     )
   }
 
-  if (!cart || cart.items.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-6 px-4 py-20 text-center">
         <div className="flex size-20 items-center justify-center rounded-full bg-muted">
@@ -170,19 +128,19 @@ export default function CartPage() {
     )
   }
 
-  const subtotal = Number(cart.subtotal)
-  const discount = Number(cart.discount ?? 0)
-  const shipping = Number(cart.shipping_cost ?? 0)
-  const total = Number(cart.total)
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      <h1 className="mb-6 text-2xl font-bold tracking-tight">Shopping Cart</h1>
+      <div className="mb-6 flex items-center gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Shopping Cart</h1>
+        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+          {count} {count === 1 ? "item" : "items"}
+        </span>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Items */}
         <div className="flex flex-col gap-3 lg:col-span-2">
-          {cart.items.map((item) => {
+          {items.map((item) => {
             const product = item.product
             const image = product?.images?.find((img) => img.is_primary)?.image_url ?? product?.images?.[0]?.image_url
             return (
@@ -210,7 +168,7 @@ export default function CartPage() {
                         <p className="text-xs text-muted-foreground">{product?.currency ?? "TSh"}</p>
                       </div>
                       <button
-                        onClick={() => removeItem(item.id)}
+                        onClick={() => handleRemove(item.id)}
                         disabled={updating === item.id}
                         className="text-muted-foreground hover:text-destructive disabled:opacity-50"
                       >
@@ -220,11 +178,11 @@ export default function CartPage() {
 
                     <div className="mt-auto flex items-center justify-between">
                       <div className="flex items-center gap-1">
-                        <Button variant="outline" size="icon-sm" onClick={() => updateQty(item.id, -1)} disabled={updating === item.id}>
+                        <Button variant="outline" size="icon-sm" onClick={() => handleUpdateQty(item.id, -1)} disabled={updating === item.id}>
                           <Minus className="size-3.5" />
                         </Button>
                         <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                        <Button variant="outline" size="icon-sm" onClick={() => updateQty(item.id, 1)} disabled={updating === item.id}>
+                        <Button variant="outline" size="icon-sm" onClick={() => handleUpdateQty(item.id, 1)} disabled={updating === item.id}>
                           <Plus className="size-3.5" />
                         </Button>
                       </div>
@@ -253,24 +211,35 @@ export default function CartPage() {
               <CardTitle>Order Summary</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              {/* Coupon */}
-              {cart.coupon_code ? (
-                <div className="flex items-center justify-between rounded-lg border p-2">
-                  <span className="text-sm font-medium text-green-600">Coupon: {cart.coupon_code}</span>
-                  <button onClick={removeCoupon} className="text-xs text-destructive hover:underline">Remove</button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Tag className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      placeholder="Coupon code"
-                      value={coupon}
-                      onChange={(e) => setCoupon(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                  <Button variant="outline" onClick={applyCoupon}>Apply</Button>
+              {/* Coupon - only for authenticated users */}
+              {!isGuest && (
+                <>
+                  {couponCode ? (
+                    <div className="flex items-center justify-between rounded-lg border p-2">
+                      <span className="text-sm font-medium text-green-600">Coupon: {couponCode}</span>
+                      <button onClick={handleRemoveCoupon} className="text-xs text-destructive hover:underline">Remove</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Tag className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          placeholder="Coupon code"
+                          value={coupon}
+                          onChange={(e) => setCoupon(e.target.value)}
+                          className="pl-9"
+                        />
+                      </div>
+                      <Button variant="outline" onClick={handleApplyCoupon}>Apply</Button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {isGuest && (
+                <div className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                  <Tag className="size-4 shrink-0" />
+                  Sign in at checkout to apply coupons
                 </div>
               )}
 
@@ -290,11 +259,11 @@ export default function CartPage() {
                 )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Shipping</span>
-                  <span className="font-medium">{shipping === 0 ? "Free" : formatPrice(shipping)}</span>
+                  <span className="font-medium">{shippingCost === 0 ? "Calculated at checkout" : formatPrice(shippingCost)}</span>
                 </div>
               </div>
 
-              {shipping > 0 && subtotal < 50000 && (
+              {subtotal < 50000 && (
                 <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-2.5 text-xs text-primary">
                   <Truck className="size-4 shrink-0" />
                   Add {formatPrice(50000 - subtotal)} more for free shipping
@@ -312,7 +281,10 @@ export default function CartPage() {
                 Proceed to Checkout <ArrowRight className="size-4" />
               </Button>
 
-              <p className="text-center text-xs text-muted-foreground">Secure payment powered by XerinPay</p>
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <ShieldCheck className="size-3" />
+                Secure payment powered by AzamPay
+              </div>
             </CardContent>
           </Card>
         </div>

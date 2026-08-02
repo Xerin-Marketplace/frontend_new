@@ -2,14 +2,15 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { Heart, ShoppingCart } from "lucide-react"
+import { Heart, ShoppingCart, Check } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { type ApiProduct, formatPrice, getPrimaryImage, getDisplayPrice } from "@/lib/store-types"
 import { toast } from "@/components/ui/toast"
-import { api, type ApiError } from "@/lib/api"
+import { useCart } from "@/lib/cart-context"
+import { type ApiError } from "@/lib/api"
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -18,19 +19,21 @@ function getApiError(err: unknown): string {
 
 export function ProductCard({ product }: { product: ApiProduct }) {
   const [adding, setAdding] = useState(false)
+  const [added, setAdded] = useState(false)
+  const { addToCart } = useCart()
   const image = getPrimaryImage(product)
   const { price, originalPrice, discount } = getDisplayPrice(product)
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    if (adding || added) return
     setAdding(true)
     try {
-      await api.post("/cart/items", {
-        product_id: product.id,
-        quantity: 1,
-      })
+      await addToCart(product, 1)
+      setAdded(true)
       toast.add({ title: "Added to cart!", description: product.name, type: "success" })
+      setTimeout(() => setAdded(false), 2000)
     } catch (err) {
       toast.add({ title: "Failed to add", description: getApiError(err), type: "error" })
     } finally {
@@ -98,10 +101,21 @@ export function ProductCard({ product }: { product: ApiProduct }) {
               "mt-1 w-full gap-1.5"
             )}
             onClick={handleAddToCart}
-            disabled={adding}
+            disabled={adding || !product.is_active}
           >
-            <ShoppingCart className="size-3.5" />
-            {adding ? "Adding..." : "Add to Cart"}
+            {added ? (
+              <>
+                <Check className="size-3.5 text-green-500" />
+                Added!
+              </>
+            ) : adding ? (
+              "Adding..."
+            ) : (
+              <>
+                <ShoppingCart className="size-3.5" />
+                Add to Cart
+              </>
+            )}
           </button>
         </div>
       </Card>

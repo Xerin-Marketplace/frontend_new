@@ -29,17 +29,17 @@ import { categories as mockCategories } from "@/lib/mock-data"
 import * as Icons from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
-import { api } from "@/lib/api"
+import { useCart } from "@/lib/cart-context"
 import { ModeToggle } from "@/components/mode-toggle"
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [cartCount, setCartCount] = useState(0)
   const profileRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { user, isAuthenticated, logout } = useAuth()
+  const { count: cartCount } = useCart()
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -50,16 +50,6 @@ export function Header() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      api.get<{ items: { id: string; quantity: number }[] }>("/cart")
-        .then((data) => {
-          setCartCount(data.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
-        })
-        .catch(() => {})
-    }
-  }, [isAuthenticated])
 
   const handleLogout = async () => {
     await logout()

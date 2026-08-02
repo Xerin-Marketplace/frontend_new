@@ -15,10 +15,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Mail, Lock, User, Store, Eye, EyeOff, ShieldCheck, ArrowLeft, Loader2 } from "lucide-react"
+import { Mail, Lock, User, Store, Eye, EyeOff, ShieldCheck, ArrowLeft, Phone, CheckCircle2 } from "lucide-react"
 import { PhoneInput } from "@/components/ui/phone-input"
 import { useAuth, type ApiError } from "@/lib/auth-context"
 import { api } from "@/lib/api"
+import { PasswordStrength } from "@/components/password-strength"
 
 type AuthMode = "login" | "register" | "seller" | "otp"
 
@@ -31,6 +32,11 @@ type BusinessCategory = {
 function getApiError(err: unknown): string {
   const e = err as ApiError
   return e?.detail || "Something went wrong. Please try again."
+}
+
+function getFieldError(errors: Record<string, string[]> | undefined, field: string): string | undefined {
+  if (!errors || !errors[field]) return undefined
+  return Array.isArray(errors[field]) ? errors[field][0] : errors[field]
 }
 
 function AuthFormInner({
@@ -51,7 +57,6 @@ function AuthFormInner({
 
   // OTP state
   const [otpPhone, setOtpPhone] = useState("")
-  const [otpPurpose, setOtpPurpose] = useState<string | undefined>(undefined)
   const [otpEmail, setOtpEmail] = useState("")
   const [resendTimer, setResendTimer] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -76,10 +81,9 @@ function AuthFormInner({
     }
   }, [])
 
-  const switchToOtp = (phone: string, email: string, purpose?: string) => {
+  const switchToOtp = (phone: string, email: string) => {
     setOtpPhone(phone)
     setOtpEmail(email)
-    setOtpPurpose(purpose)
     setMode("otp")
     startResendTimer()
   }
@@ -87,6 +91,7 @@ function AuthFormInner({
   // Login state
   const [loginEmail, setLoginEmail] = useState("")
   const [loginPassword, setLoginPassword] = useState("")
+  const [loginErrors, setLoginErrors] = useState<Record<string, string>>({})
 
   // Register state
   const [regFirstName, setRegFirstName] = useState("")
@@ -94,6 +99,8 @@ function AuthFormInner({
   const [regEmail, setRegEmail] = useState("")
   const [regPhone, setRegPhone] = useState("")
   const [regPassword, setRegPassword] = useState("")
+  const [regAgreed, setRegAgreed] = useState(false)
+  const [regErrors, setRegErrors] = useState<Record<string, string>>({})
 
   // Seller state
   const [sellerFirstName, setSellerFirstName] = useState("")
@@ -105,13 +112,13 @@ function AuthFormInner({
   const [sellerAgreement, setSellerAgreement] = useState(false)
   const [categories, setCategories] = useState<BusinessCategory[]>([])
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([])
+  const [sellerErrors, setSellerErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (mode === "seller" && categories.length === 0) {
       api.get<BusinessCategory[]>("/admin/business-categories")
         .then(setCategories)
         .catch(() => {
-          // If admin endpoint fails, use fallback categories
           setCategories([
             { id: "fallback-electronics", name: "Electronics", description: null },
             { id: "fallback-fashion", name: "Fashion & Apparel", description: null },
@@ -130,8 +137,24 @@ function AuthFormInner({
     )
   }
 
+  // Clear errors when switching tabs
+  const handleTabChange = (v: string) => {
+    setMode(v as AuthMode)
+    setLoginErrors({})
+    setRegErrors({})
+    setSellerErrors({})
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLoginErrors({})
+    if (!loginEmail || !loginPassword) {
+      setLoginErrors({
+        ...(!loginEmail && { email: "Email is required" }),
+        ...(!loginPassword && { password: "Password is required" }),
+      })
+      return
+    }
     setLoading(true)
     try {
       const user = await login(loginEmail, loginPassword)
@@ -150,22 +173,26 @@ function AuthFormInner({
     } catch (err) {
       const apiErr = err as ApiError
       const detail = apiErr?.detail || ""
-      // If account is not verified, redirect to OTP verification
       if (detail.toLowerCase().includes("not verified") || detail.toLowerCase().includes("verification")) {
         toast.add({
           title: "Verification required",
           description: "Please verify your phone number to continue.",
           type: "warning",
         })
-        // Try to find the user's phone by their email
         try {
           const res = await api.get<{ phone: string }>(`/users/lookup?email=${encodeURIComponent(loginEmail)}`)
-          switchToOtp(res.phone, loginEmail, "register")
+          switchToOtp(res.phone, loginEmail)
         } catch {
-          // If lookup fails, ask user to enter phone manually
-          switchToOtp("", loginEmail, "register")
+          switchToOtp("", loginEmail)
         }
       } else {
+        if (apiErr?.errors) {
+          const fieldErrs: Record<string, string> = {}
+          for (const [key, val] of Object.entries(apiErr.errors)) {
+            fieldErrs[key] = Array.isArray(val) ? val[0] : val
+          }
+          setLoginErrors(fieldErrs)
+        }
         toast.add({
           title: "Sign in failed",
           description: getApiError(err),
@@ -179,6 +206,11 @@ function AuthFormInner({
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
+    setRegErrors({})
+    if (!regAgreed) {
+      toast.add({ title: "Please accept the Terms", description: "You must agree to the Terms of Service and Privacy Policy.", type: "warning" })
+      return
+    }
     setLoading(true)
     try {
       await register({
@@ -193,8 +225,16 @@ function AuthFormInner({
         description: "A verification code has been sent to your phone.",
         type: "success",
       })
-      switchToOtp(regPhone, regEmail, "register")
+      switchToOtp(regPhone, regEmail)
     } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr?.errors) {
+        const fieldErrs: Record<string, string> = {}
+        for (const [key, val] of Object.entries(apiErr.errors)) {
+          fieldErrs[key] = Array.isArray(val) ? val[0] : val
+        }
+        setRegErrors(fieldErrs)
+      }
       toast.add({
         title: "Registration failed",
         description: getApiError(err),
@@ -207,12 +247,17 @@ function AuthFormInner({
 
   const handleSellerRegister = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSellerErrors({})
     if (selectedCategoryIds.length === 0) {
       toast.add({
         title: "Select categories",
         description: "Please select at least one business category.",
-        type: "error",
+        type: "warning",
       })
+      return
+    }
+    if (!sellerAgreement) {
+      toast.add({ title: "Please accept the Seller Agreement", type: "warning" })
       return
     }
     setLoading(true)
@@ -232,8 +277,16 @@ function AuthFormInner({
         description: "A verification code has been sent to your phone.",
         type: "success",
       })
-      switchToOtp(sellerPhone, sellerEmail, "register_seller")
+      switchToOtp(sellerPhone, sellerEmail)
     } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr?.errors) {
+        const fieldErrs: Record<string, string> = {}
+        for (const [key, val] of Object.entries(apiErr.errors)) {
+          fieldErrs[key] = Array.isArray(val) ? val[0] : val
+        }
+        setSellerErrors(fieldErrs)
+      }
       toast.add({
         title: "Seller registration failed",
         description: getApiError(err),
@@ -243,6 +296,8 @@ function AuthFormInner({
       setLoading(false)
     }
   }
+
+  const fieldErrorClass = (error?: string) => error ? "border-red-500 focus-visible:ring-red-500" : ""
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -269,11 +324,10 @@ function AuthFormInner({
         <OtpVerificationForm
           phone={otpPhone}
           email={otpEmail}
-          purpose={otpPurpose}
           resendTimer={resendTimer}
           onResend={async () => {
             try {
-              await sendOtp(otpPhone, otpPurpose)
+              await sendOtp(otpPhone)
               toast.add({ title: "Code sent", description: "A new verification code has been sent.", type: "info" })
               startResendTimer()
             } catch (err) {
@@ -283,7 +337,7 @@ function AuthFormInner({
           onVerify={async (code) => {
             setLoading(true)
             try {
-              await verifyOtp(otpPhone, code, otpPurpose)
+              await verifyOtp(otpPhone, code)
               toast.add({ title: "Phone verified!", description: "Your account has been verified. You can now sign in.", type: "success" })
               setMode("login")
               setLoginEmail(otpEmail)
@@ -300,7 +354,7 @@ function AuthFormInner({
       ) : (
       <Tabs
         value={mode}
-        onValueChange={(v) => setMode(v as AuthMode)}
+        onValueChange={handleTabChange}
         className="w-full"
       >
         <TabsList className="grid w-full grid-cols-3">
@@ -321,12 +375,16 @@ function AuthFormInner({
                     id="login-email"
                     type="email"
                     placeholder="m@example.com"
-                    className="pl-9"
+                    className={cn("pl-9", fieldErrorClass(loginErrors.email))}
                     value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
+                    onChange={(e) => {
+                      setLoginEmail(e.target.value)
+                      if (loginErrors.email) setLoginErrors((p) => ({ ...p, email: "" }))
+                    }}
                     required
                   />
                 </div>
+                {loginErrors.email && <FieldDescription className="text-red-500">{loginErrors.email}</FieldDescription>}
               </Field>
               <Field>
                 <div className="flex items-center">
@@ -344,9 +402,12 @@ function AuthFormInner({
                     id="login-password"
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="pl-9 pr-9"
+                    className={cn("pl-9 pr-9", fieldErrorClass(loginErrors.password))}
                     value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
+                    onChange={(e) => {
+                      setLoginPassword(e.target.value)
+                      if (loginErrors.password) setLoginErrors((p) => ({ ...p, password: "" }))
+                    }}
                     required
                   />
                   <button
@@ -357,6 +418,7 @@ function AuthFormInner({
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
+                {loginErrors.password && <FieldDescription className="text-red-500">{loginErrors.password}</FieldDescription>}
               </Field>
               <Field orientation="horizontal" className="items-center gap-2">
                 <Checkbox id="remember" defaultChecked />
@@ -367,44 +429,11 @@ function AuthFormInner({
               <Button type="submit" className="w-full" loading={loading}>
                 {loading ? "Signing in..." : "Sign in"}
               </Button>
-              <FieldSeparator>Or continue with</FieldSeparator>
-              <div className="grid grid-cols-2 gap-3">
-                <Button variant="outline" type="button" className="w-full">
-                  <svg className="size-4" viewBox="0 0 24 24">
-                    <path
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      fill="#4285F4"
-                    />
-                    <path
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      fill="#34A853"
-                    />
-                    <path
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      fill="#FBBC05"
-                    />
-                    <path
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      fill="#EA4335"
-                    />
-                  </svg>
-                  Google
-                </Button>
-                <Button variant="outline" type="button" className="w-full">
-                  <svg className="size-4" viewBox="0 0 24 24">
-                    <path
-                      d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
-                      fill="currentColor"
-                    />
-                  </svg>
-                  GitHub
-                </Button>
-              </div>
               <FieldDescription className="text-center">
                 Don&apos;t have an account?{" "}
                 <button
                   type="button"
-                  onClick={() => setMode("register")}
+                  onClick={() => handleTabChange("register")}
                   className="font-medium text-primary underline underline-offset-4"
                 >
                   Sign up
@@ -427,12 +456,16 @@ function AuthFormInner({
                       id="reg-first-name"
                       type="text"
                       placeholder="John"
-                      className="pl-9"
+                      className={cn("pl-9", fieldErrorClass(regErrors.first_name))}
                       value={regFirstName}
-                      onChange={(e) => setRegFirstName(e.target.value)}
+                      onChange={(e) => {
+                        setRegFirstName(e.target.value)
+                        if (regErrors.first_name) setRegErrors((p) => ({ ...p, first_name: "" }))
+                      }}
                       required
                     />
                   </div>
+                  {regErrors.first_name && <FieldDescription className="text-red-500">{regErrors.first_name}</FieldDescription>}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="reg-last-name">Last Name</FieldLabel>
@@ -440,10 +473,15 @@ function AuthFormInner({
                     id="reg-last-name"
                     type="text"
                     placeholder="Doe"
+                    className={cn(fieldErrorClass(regErrors.last_name))}
                     value={regLastName}
-                    onChange={(e) => setRegLastName(e.target.value)}
+                    onChange={(e) => {
+                      setRegLastName(e.target.value)
+                      if (regErrors.last_name) setRegErrors((p) => ({ ...p, last_name: "" }))
+                    }}
                     required
                   />
+                  {regErrors.last_name && <FieldDescription className="text-red-500">{regErrors.last_name}</FieldDescription>}
                 </Field>
               </div>
               <Field>
@@ -454,12 +492,16 @@ function AuthFormInner({
                     id="reg-email"
                     type="email"
                     placeholder="m@example.com"
-                    className="pl-9"
+                    className={cn("pl-9", fieldErrorClass(regErrors.email))}
                     value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
+                    onChange={(e) => {
+                      setRegEmail(e.target.value)
+                      if (regErrors.email) setRegErrors((p) => ({ ...p, email: "" }))
+                    }}
                     required
                   />
                 </div>
+                {regErrors.email && <FieldDescription className="text-red-500">{regErrors.email}</FieldDescription>}
               </Field>
               <Field>
                 <FieldLabel htmlFor="reg-phone">Phone</FieldLabel>
@@ -469,6 +511,7 @@ function AuthFormInner({
                   onChange={setRegPhone}
                   required
                 />
+                {regErrors.phone && <FieldDescription className="text-red-500">{regErrors.phone}</FieldDescription>}
               </Field>
               <Field>
                 <FieldLabel htmlFor="reg-password">Password</FieldLabel>
@@ -477,10 +520,13 @@ function AuthFormInner({
                   <Input
                     id="reg-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Min. 8 chars, 1 uppercase, 1 number"
-                    className="pl-9 pr-9"
+                    placeholder="Create a strong password"
+                    className={cn("pl-9 pr-9", fieldErrorClass(regErrors.password))}
                     value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
+                    onChange={(e) => {
+                      setRegPassword(e.target.value)
+                      if (regErrors.password) setRegErrors((p) => ({ ...p, password: "" }))
+                    }}
                     required
                     minLength={8}
                   />
@@ -492,12 +538,16 @@ function AuthFormInner({
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
-                <FieldDescription>
-                  At least 8 characters with 1 uppercase letter and 1 number.
-                </FieldDescription>
+                <PasswordStrength password={regPassword} className="mt-2" />
+                {regErrors.password && <FieldDescription className="text-red-500">{regErrors.password}</FieldDescription>}
               </Field>
               <Field orientation="horizontal" className="items-start gap-2">
-                <Checkbox id="terms" className="mt-0.5" required />
+                <Checkbox
+                  id="terms"
+                  className="mt-0.5"
+                  checked={regAgreed}
+                  onCheckedChange={(val) => setRegAgreed(!!val)}
+                />
                 <FieldLabel
                   htmlFor="terms"
                   className="text-sm font-normal leading-snug"
@@ -512,14 +562,14 @@ function AuthFormInner({
                   </a>
                 </FieldLabel>
               </Field>
-              <Button type="submit" className="w-full" loading={loading}>
+              <Button type="submit" className="w-full" loading={loading} disabled={!regAgreed}>
                 {loading ? "Creating account..." : "Create account"}
               </Button>
               <FieldDescription className="text-center">
                 Already have an account?{" "}
                 <button
                   type="button"
-                  onClick={() => setMode("login")}
+                  onClick={() => handleTabChange("login")}
                   className="font-medium text-primary underline underline-offset-4"
                 >
                   Sign in
@@ -542,12 +592,16 @@ function AuthFormInner({
                       id="seller-first-name"
                       type="text"
                       placeholder="John"
-                      className="pl-9"
+                      className={cn("pl-9", fieldErrorClass(sellerErrors.first_name))}
                       value={sellerFirstName}
-                      onChange={(e) => setSellerFirstName(e.target.value)}
+                      onChange={(e) => {
+                        setSellerFirstName(e.target.value)
+                        if (sellerErrors.first_name) setSellerErrors((p) => ({ ...p, first_name: "" }))
+                      }}
                       required
                     />
                   </div>
+                  {sellerErrors.first_name && <FieldDescription className="text-red-500">{sellerErrors.first_name}</FieldDescription>}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="seller-last-name">Last Name</FieldLabel>
@@ -555,10 +609,15 @@ function AuthFormInner({
                     id="seller-last-name"
                     type="text"
                     placeholder="Doe"
+                    className={cn(fieldErrorClass(sellerErrors.last_name))}
                     value={sellerLastName}
-                    onChange={(e) => setSellerLastName(e.target.value)}
+                    onChange={(e) => {
+                      setSellerLastName(e.target.value)
+                      if (sellerErrors.last_name) setSellerErrors((p) => ({ ...p, last_name: "" }))
+                    }}
                     required
                   />
+                  {sellerErrors.last_name && <FieldDescription className="text-red-500">{sellerErrors.last_name}</FieldDescription>}
                 </Field>
               </div>
               <Field>
@@ -569,12 +628,16 @@ function AuthFormInner({
                     id="seller-name"
                     type="text"
                     placeholder="Acme Trading Co."
-                    className="pl-9"
+                    className={cn("pl-9", fieldErrorClass(sellerErrors.business_name))}
                     value={sellerBusinessName}
-                    onChange={(e) => setSellerBusinessName(e.target.value)}
+                    onChange={(e) => {
+                      setSellerBusinessName(e.target.value)
+                      if (sellerErrors.business_name) setSellerErrors((p) => ({ ...p, business_name: "" }))
+                    }}
                     required
                   />
                 </div>
+                {sellerErrors.business_name && <FieldDescription className="text-red-500">{sellerErrors.business_name}</FieldDescription>}
               </Field>
               <Field>
                 <FieldLabel htmlFor="seller-email">Business Email</FieldLabel>
@@ -584,12 +647,16 @@ function AuthFormInner({
                     id="seller-email"
                     type="email"
                     placeholder="business@example.com"
-                    className="pl-9"
+                    className={cn("pl-9", fieldErrorClass(sellerErrors.email))}
                     value={sellerEmail}
-                    onChange={(e) => setSellerEmail(e.target.value)}
+                    onChange={(e) => {
+                      setSellerEmail(e.target.value)
+                      if (sellerErrors.email) setSellerErrors((p) => ({ ...p, email: "" }))
+                    }}
                     required
                   />
                 </div>
+                {sellerErrors.email && <FieldDescription className="text-red-500">{sellerErrors.email}</FieldDescription>}
               </Field>
               <Field>
                 <FieldLabel htmlFor="seller-phone">Phone Number</FieldLabel>
@@ -599,6 +666,7 @@ function AuthFormInner({
                   onChange={setSellerPhone}
                   required
                 />
+                {sellerErrors.phone && <FieldDescription className="text-red-500">{sellerErrors.phone}</FieldDescription>}
               </Field>
               <Field>
                 <FieldLabel>Business Categories</FieldLabel>
@@ -613,17 +681,19 @@ function AuthFormInner({
                         type="button"
                         onClick={() => toggleCategory(cat.id)}
                         className={cn(
-                          "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                          "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                           selectedCategoryIds.includes(cat.id)
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-input bg-background hover:bg-muted"
                         )}
                       >
+                        {selectedCategoryIds.includes(cat.id) && <CheckCircle2 className="size-3" />}
                         {cat.name}
                       </button>
                     ))
                   )}
                 </div>
+                {sellerErrors.business_category_ids && <FieldDescription className="text-red-500">{sellerErrors.business_category_ids}</FieldDescription>}
               </Field>
               <Field>
                 <FieldLabel htmlFor="seller-password">Password</FieldLabel>
@@ -632,10 +702,13 @@ function AuthFormInner({
                   <Input
                     id="seller-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Min. 8 chars, 1 uppercase, 1 number"
-                    className="pl-9 pr-9"
+                    placeholder="Create a strong password"
+                    className={cn("pl-9 pr-9", fieldErrorClass(sellerErrors.password))}
                     value={sellerPassword}
-                    onChange={(e) => setSellerPassword(e.target.value)}
+                    onChange={(e) => {
+                      setSellerPassword(e.target.value)
+                      if (sellerErrors.password) setSellerErrors((p) => ({ ...p, password: "" }))
+                    }}
                     required
                     minLength={8}
                   />
@@ -647,9 +720,8 @@ function AuthFormInner({
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
-                <FieldDescription>
-                  At least 8 characters with 1 uppercase letter and 1 number.
-                </FieldDescription>
+                <PasswordStrength password={sellerPassword} className="mt-2" />
+                {sellerErrors.password && <FieldDescription className="text-red-500">{sellerErrors.password}</FieldDescription>}
               </Field>
               <Field orientation="horizontal" className="items-start gap-2">
                 <Checkbox
@@ -683,7 +755,7 @@ function AuthFormInner({
                 Already a seller?{" "}
                 <button
                   type="button"
-                  onClick={() => setMode("login")}
+                  onClick={() => handleTabChange("login")}
                   className="font-medium text-primary underline underline-offset-4"
                 >
                   Sign in
@@ -701,7 +773,6 @@ function AuthFormInner({
 function OtpVerificationForm({
   phone,
   email,
-  purpose,
   resendTimer,
   loading,
   onResend,
@@ -711,7 +782,6 @@ function OtpVerificationForm({
 }: {
   phone: string
   email: string
-  purpose?: string
   resendTimer: number
   loading: boolean
   onResend: () => void
@@ -719,14 +789,74 @@ function OtpVerificationForm({
   onBack: () => void
   onPhoneChange: (phone: string) => void
 }) {
-  const [otp, setOtp] = useState("")
+  const [digits, setDigits] = useState<string[]>(Array(6).fill(""))
   const [localPhone, setLocalPhone] = useState(phone)
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  useEffect(() => {
+    if (inputRefs.current[0]) {
+      inputRefs.current[0]?.focus()
+    }
+  }, [])
+
+  const code = digits.join("")
+
+  const handleDigitChange = (index: number, value: string) => {
+    const cleanValue = value.replace(/\D/g, "")
+    if (!cleanValue) {
+      setDigits((prev) => {
+        const next = [...prev]
+        next[index] = ""
+        return next
+      })
+      return
+    }
+
+    // Handle paste of multiple digits
+    if (cleanValue.length > 1) {
+      const pasted = cleanValue.slice(0, 6 - index).split("")
+      setDigits((prev) => {
+        const next = [...prev]
+        pasted.forEach((d, i) => {
+          if (index + i < 6) next[index + i] = d
+        })
+        return next
+      })
+      const lastFilled = Math.min(index + pasted.length, 5)
+      inputRefs.current[lastFilled]?.focus()
+      return
+    }
+
+    setDigits((prev) => {
+      const next = [...prev]
+      next[index] = cleanValue
+      return next
+    })
+
+    if (index < 5) {
+      inputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !digits[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus()
+    }
+    if (e.key === "ArrowLeft" && index > 0) {
+      inputRefs.current[index - 1]?.focus()
+    }
+    if (e.key === "ArrowRight" && index < 5) {
+      inputRefs.current[index + 1]?.focus()
+    }
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (otp.length < 4) return
-    onVerify(otp)
+    if (code.length < 4) return
+    onVerify(code)
   }
+
+  const isComplete = code.length === 6
 
   return (
     <div className="flex flex-col gap-6">
@@ -766,24 +896,33 @@ function OtpVerificationForm({
           )}
 
           <Field>
-            <FieldLabel htmlFor="otp-code">Verification Code</FieldLabel>
-            <Input
-              id="otp-code"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="Enter 6-digit code"
-              className="text-center text-lg font-bold tracking-[0.3em]"
-              maxLength={10}
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-              required
-              autoFocus
-            />
+            <FieldLabel htmlFor="otp-code-0">Verification Code</FieldLabel>
+            <div className="flex justify-between gap-2">
+              {digits.map((digit, idx) => (
+                <input
+                  key={idx}
+                  ref={(el) => { inputRefs.current[idx] = el }}
+                  id={`otp-code-${idx}`}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={digit}
+                  onChange={(e) => handleDigitChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(idx, e)}
+                  className={cn(
+                    "size-11 rounded-lg border bg-background text-center text-lg font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-ring sm:size-12",
+                    digit ? "border-primary" : "border-input",
+                    isComplete && "border-green-500"
+                  )}
+                  autoFocus={idx === 0}
+                />
+              ))}
+            </div>
             <FieldDescription>Enter the 6-digit code sent to your phone.</FieldDescription>
           </Field>
 
-          <Button type="submit" className="w-full" loading={loading} disabled={otp.length < 4}>
+          <Button type="submit" className="w-full" loading={loading} disabled={code.length < 4}>
             {loading ? "Verifying..." : "Verify Code"}
           </Button>
 
@@ -796,8 +935,7 @@ function OtpVerificationForm({
               <ArrowLeft className="size-3.5" /> Back to login
             </button>
             {resendTimer > 0 ? (
-              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Loader2 className="size-3 animate-spin" />
+              <span className="text-sm text-muted-foreground">
                 Resend in {resendTimer}s
               </span>
             ) : (

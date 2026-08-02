@@ -15,6 +15,10 @@ import {
   CheckCircle2,
   Info,
   Loader2,
+  User,
+  Mail,
+  Phone,
+  Store,
   type LucideIcon,
 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -22,34 +26,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { api, type ApiError } from "@/lib/api"
 import { toast } from "@/components/ui/toast"
-import { formatPrice, type ApiProduct } from "@/lib/store-types"
+import { formatPrice } from "@/lib/store-types"
 import { useAuth } from "@/lib/auth-context"
+import { useCart } from "@/lib/cart-context"
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
   return e?.detail || "Something went wrong. Please try again."
-}
-
-type CartItem = {
-  id: string
-  product_id: string
-  quantity: number
-  product: ApiProduct
-  unit_price: number
-  total_price: number
-}
-
-type CartResponse = {
-  id: string
-  items: CartItem[]
-  subtotal: number
-  discount: number
-  shipping_cost: number
-  total: number
-  coupon_code: string | null
 }
 
 type Address = {
@@ -105,51 +92,156 @@ const PAYMENT_TYPES: {
   { value: "cash_on_delivery", label: "Cash on Delivery", icon: Truck, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30", border: "border-blue-500" },
 ]
 
+const TZ_REGIONS = [
+  "Dar es Salaam", "Arusha", "Dodoma", "Mwanza", "Zanzibar", "Tanga",
+  "Morogoro", "Mbeya", "Kilimanjaro", "Mara", "Singida", "Iringa",
+  "Kagera", "Geita", "Songwe", "Ruvuma", "Lindi", "Mtwara",
+  "Pwani", "Manyara", "Njombe", "Katavi", "Simiyu", "Shinyanga",
+  "Kigoma", "Rukwa", "Tabora", "Kusini Pemba", "Kaskazini Pemba",
+  "Kusini Unguja", "Kaskazini Unguja", "Mjini Magharibi",
+]
+
 export default function CheckoutPage() {
   const router = useRouter()
-  const { isAuthenticated } = useAuth()
-  const [cart, setCart] = useState<CartResponse | null>(null)
+  const { isAuthenticated, user, login, register } = useAuth()
+  const { items, subtotal, discount, shippingCost, total, couponCode, loading: cartLoading, isGuest, mergeGuestCart } = useCart()
   const [addresses, setAddresses] = useState<Address[]>([])
   const [loading, setLoading] = useState(true)
   const [placing, setPlacing] = useState(false)
 
+  // Auth state for guest
+  const [authMode, setAuthMode] = useState<"guest" | "signin" | "signup">("guest")
+  const [signInEmail, setSignInEmail] = useState("")
+  const [signInPassword, setSignInPassword] = useState("")
+  const [signUpFirstName, setSignUpFirstName] = useState("")
+  const [signUpLastName, setSignUpLastName] = useState("")
+  const [signUpEmail, setSignUpEmail] = useState("")
+  const [signUpPhone, setSignUpPhone] = useState("")
+  const [signUpPassword, setSignUpPassword] = useState("")
+  const [authLoading, setAuthLoading] = useState(false)
+
+  // Shipping form state (for guests)
+  const [shipFirstName, setShipFirstName] = useState("")
+  const [shipLastName, setShipLastName] = useState("")
+  const [shipPhone, setShipPhone] = useState("")
+  const [shipEmail, setShipEmail] = useState("")
+  const [shipCountry, setShipCountry] = useState("Tanzania")
+  const [shipRegion, setShipRegion] = useState("")
+  const [shipCity, setShipCity] = useState("")
+  const [shipStreet, setShipStreet] = useState("")
+  const [shipPostalCode, setShipPostalCode] = useState("")
+  const [shipNotes, setShipNotes] = useState("")
+  const [saveInfo, setSaveInfo] = useState(true)
+
+  // Saved address selection (for authenticated users)
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
+  const [useNewAddress, setUseNewAddress] = useState(false)
+  // New address form for authenticated users
+  const [newAddrCountry, setNewAddrCountry] = useState("Tanzania")
+  const [newAddrRegion, setNewAddrRegion] = useState("")
+  const [newAddrCity, setNewAddrCity] = useState("")
+  const [newAddrStreet, setNewAddrStreet] = useState("")
+  const [newAddrPostalCode, setNewAddrPostalCode] = useState("")
+
+  // Payment state
   const [paymentMethod, setPaymentMethod] = useState("mobile_money")
   const [mnoProvider, setMnoProvider] = useState("mpesa")
   const [phoneNumber, setPhoneNumber] = useState("")
   const [notes, setNotes] = useState("")
 
-  const fetchInitialData = useCallback(async () => {
-    setLoading(true)
+  const fetchAddresses = useCallback(async () => {
     try {
-      const [cartRes, addrRes] = await Promise.all([
-        api.get<CartResponse>("/cart"),
-        api.get<Address[]>("/addresses").catch(() => [] as Address[]),
-      ])
-      setCart(cartRes)
+      const addrRes = await api.get<Address[]>("/addresses").catch(() => [] as Address[])
       setAddresses(addrRes)
       const defaultAddr = addrRes.find((a) => a.is_default) ?? addrRes[0]
       if (defaultAddr) setSelectedAddressId(defaultAddr.id)
-    } catch (err) {
-      toast.add({ title: "Failed to load checkout data", description: getApiError(err), type: "error" })
-    } finally {
-      setLoading(false)
+    } catch {
+      // ignore
     }
   }, [])
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchInitialData()
+      Promise.all([fetchAddresses()]).finally(() => setLoading(false))
     } else {
       setLoading(false)
     }
-  }, [isAuthenticated, fetchInitialData])
+  }, [isAuthenticated, fetchAddresses])
+
+  // Pre-fill shipping from user data
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setShipFirstName(user.first_name || "")
+      setShipLastName(user.last_name || "")
+      setShipPhone(user.phone || "")
+      setShipEmail(user.email || "")
+    }
+  }, [isAuthenticated, user])
+
+  const handleGuestSignIn = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthLoading(true)
+    try {
+      await login(signInEmail, signInPassword)
+      toast.add({ title: "Welcome back!", type: "success" })
+      await mergeGuestCart()
+      await fetchAddresses()
+      setAuthMode("guest")
+    } catch (err) {
+      toast.add({ title: "Sign in failed", description: getApiError(err), type: "error" })
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleGuestSignUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthLoading(true)
+    try {
+      await register({
+        first_name: signUpFirstName,
+        last_name: signUpLastName,
+        email: signUpEmail,
+        phone: signUpPhone,
+        password: signUpPassword,
+      })
+      toast.add({ title: "Account created!", description: "Please verify your phone to continue.", type: "success" })
+      // Auto-login after register
+      try {
+        await login(signUpEmail, signUpPassword)
+        await mergeGuestCart()
+        await fetchAddresses()
+        setAuthMode("guest")
+      } catch {
+        toast.add({ title: "Please sign in", description: "Account created but login failed. Please sign in.", type: "info" })
+        setAuthMode("signin")
+      }
+    } catch (err) {
+      toast.add({ title: "Registration failed", description: getApiError(err), type: "error" })
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const validateShipping = (): boolean => {
+    if (isAuthenticated && selectedAddressId && !useNewAddress) return true
+
+    const required = isGuest || useNewAddress
+    if (!required) return true
+
+    const fields = isGuest
+      ? [shipFirstName, shipLastName, shipPhone, shipRegion, shipCity, shipStreet]
+      : [newAddrRegion, newAddrCity, newAddrStreet]
+
+    if (fields.some((f) => !f.trim())) {
+      toast.add({ title: "Missing information", description: "Please fill in all required shipping fields.", type: "warning" })
+      return false
+    }
+    return true
+  }
 
   const handlePlaceOrder = async () => {
-    if (!selectedAddressId) {
-      toast.add({ title: "Please select a delivery address", type: "warning" })
-      return
-    }
+    if (!validateShipping()) return
     if (paymentMethod === "mobile_money" && !phoneNumber.trim()) {
       toast.add({ title: "Please enter your phone number", type: "warning" })
       return
@@ -157,10 +249,42 @@ export default function CheckoutPage() {
 
     setPlacing(true)
     try {
+      let addressId = selectedAddressId
+
+      // For guests or new address — create address first
+      if (isGuest || useNewAddress) {
+        const addrData = isGuest
+          ? {
+              country: shipCountry,
+              region: shipRegion,
+              city: shipCity,
+              street: shipStreet,
+              postal_code: shipPostalCode || null,
+              is_default: true,
+            }
+          : {
+              country: newAddrCountry,
+              region: newAddrRegion,
+              city: newAddrCity,
+              street: newAddrStreet,
+              postal_code: newAddrPostalCode || null,
+              is_default: addresses.length === 0,
+            }
+
+        const addr = await api.post<Address>("/addresses", addrData)
+        addressId = addr.id
+      }
+
+      if (!addressId) {
+        toast.add({ title: "Please select a delivery address", type: "warning" })
+        setPlacing(false)
+        return
+      }
+
       // Step 1: Create the order
       const order = await api.post<OrderResponse>("/orders", {
-        shipping_address_id: selectedAddressId,
-        notes: notes.trim() || undefined,
+        shipping_address_id: addressId,
+        notes: (isGuest ? shipNotes : notes).trim() || undefined,
       })
 
       // Step 2: Handle payment
@@ -170,7 +294,6 @@ export default function CheckoutPage() {
         return
       }
 
-      // Initiate payment via backend
       const payment = await api.post<PaymentResponse>("/payments/initiate", {
         order_id: order.id,
         method: paymentMethod,
@@ -186,10 +309,8 @@ export default function CheckoutPage() {
         toast.add({ title: "Payment successful!", type: "success" })
         router.push(`/checkout/success?order_id=${order.id}&payment_id=${payment.id}`)
       } else if (checkoutUrl) {
-        // Card payment - redirect to AzamPay hosted checkout
         window.location.href = checkoutUrl
       } else {
-        // Mobile money - redirect to processing page
         router.push(`/checkout/processing?payment_id=${payment.id}&order_id=${order.id}`)
       }
     } catch (err) {
@@ -199,22 +320,7 @@ export default function CheckoutPage() {
     }
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-6 px-4 py-20 text-center">
-        <div className="flex size-20 items-center justify-center rounded-full bg-muted">
-          <ShoppingBag className="size-10 text-muted-foreground" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Please sign in</h1>
-          <p className="mt-2 text-muted-foreground">Sign in to checkout your items</p>
-        </div>
-        <Link href="/auth?tab=login" className={buttonVariants({ size: "lg" })}>Sign In</Link>
-      </div>
-    )
-  }
-
-  if (loading) {
+  if (cartLoading || loading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-6">
         <Skeleton className="mb-6 h-8 w-40" />
@@ -230,7 +336,7 @@ export default function CheckoutPage() {
     )
   }
 
-  if (!cart || cart.items.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-6 px-4 py-20 text-center">
         <div className="flex size-20 items-center justify-center rounded-full bg-muted">
@@ -247,11 +353,6 @@ export default function CheckoutPage() {
     )
   }
 
-  const subtotal = Number(cart.subtotal)
-  const discount = Number(cart.discount ?? 0)
-  const shipping = Number(cart.shipping_cost ?? 0)
-  const total = Number(cart.total)
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
       {/* Header */}
@@ -260,21 +361,78 @@ export default function CheckoutPage() {
           <ArrowLeft className="size-5" />
         </Link>
         <h1 className="text-2xl font-bold tracking-tight">Checkout</h1>
+        {isGuest && (
+          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+            Guest Checkout
+          </span>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left: Items + Address + Payment */}
         <div className="flex flex-col gap-6 lg:col-span-2">
+          {/* Guest auth prompt */}
+          {isGuest && (
+            <Card className={cn("border-primary/30", authMode !== "guest" && "ring-1 ring-primary/20")}>
+              <CardContent className="p-4">
+                {authMode === "guest" ? (
+                  <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:text-left">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <User className="size-5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Have an account?</p>
+                      <p className="text-xs text-muted-foreground">Sign in for faster checkout, saved addresses, and order tracking.</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setAuthMode("signin")}>Sign In</Button>
+                      <Button size="sm" onClick={() => setAuthMode("signup")}>Sign Up</Button>
+                    </div>
+                  </div>
+                ) : authMode === "signin" ? (
+                  <form className="flex flex-col gap-3" onSubmit={handleGuestSignIn}>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">Sign In</h3>
+                      <button type="button" onClick={() => setAuthMode("guest")} className="text-xs text-muted-foreground hover:text-foreground">
+                        Continue as guest
+                      </button>
+                    </div>
+                    <Input type="email" placeholder="Email" value={signInEmail} onChange={(e) => setSignInEmail(e.target.value)} required />
+                    <Input type="password" placeholder="Password" value={signInPassword} onChange={(e) => setSignInPassword(e.target.value)} required />
+                    <Button type="submit" loading={authLoading} size="sm">Sign In</Button>
+                  </form>
+                ) : (
+                  <form className="flex flex-col gap-3" onSubmit={handleGuestSignUp}>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">Create Account</h3>
+                      <button type="button" onClick={() => setAuthMode("guest")} className="text-xs text-muted-foreground hover:text-foreground">
+                        Continue as guest
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input placeholder="First name" value={signUpFirstName} onChange={(e) => setSignUpFirstName(e.target.value)} required />
+                      <Input placeholder="Last name" value={signUpLastName} onChange={(e) => setSignUpLastName(e.target.value)} required />
+                    </div>
+                    <Input type="email" placeholder="Email" value={signUpEmail} onChange={(e) => setSignUpEmail(e.target.value)} required />
+                    <Input type="tel" placeholder="Phone (e.g. 0712345678)" value={signUpPhone} onChange={(e) => setSignUpPhone(e.target.value)} required />
+                    <Input type="password" placeholder="Password (min 8 chars)" value={signUpPassword} onChange={(e) => setSignUpPassword(e.target.value)} required minLength={8} />
+                    <Button type="submit" loading={authLoading} size="sm">Create Account & Continue</Button>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Order Items */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <ShoppingBag className="size-4 text-primary" />
-                Order Items ({cart.items.length})
+                Order Items ({items.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {cart.items.map((item) => {
+              {items.map((item) => {
                 const product = item.product
                 const image = product?.images?.find((img) => img.is_primary)?.image_url ?? product?.images?.[0]?.image_url
                 return (
@@ -312,52 +470,186 @@ export default function CheckoutPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {addresses.length === 0 ? (
+              {/* Saved addresses for authenticated users */}
+              {isAuthenticated && addresses.length > 0 && !useNewAddress && (
+                <>
+                  {addresses.map((addr) => {
+                    const isSelected = selectedAddressId === addr.id
+                    return (
+                      <button
+                        key={addr.id}
+                        onClick={() => setSelectedAddressId(addr.id)}
+                        className={cn(
+                          "flex items-start gap-3 rounded-lg border p-4 text-left transition-all",
+                          isSelected
+                            ? "border-primary bg-primary/5 ring-1 ring-primary"
+                            : "border-border hover:border-primary/40"
+                        )}
+                      >
+                        <div className={cn(
+                          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                          isSelected ? "border-primary bg-primary" : "border-muted-foreground/30"
+                        )}>
+                          {isSelected && <CheckCircle2 className="size-3 text-primary-foreground" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{addr.street}</span>
+                            {addr.is_default && (
+                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Default</span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {addr.city}, {addr.region}, {addr.country}
+                            {addr.postal_code ? ` • ${addr.postal_code}` : ""}
+                          </p>
+                        </div>
+                      </button>
+                    )
+                  })}
+                  <button
+                    onClick={() => setUseNewAddress(true)}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-dashed py-3 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+                  >
+                    <MapPin className="size-4" />
+                    Use a new address
+                  </button>
+                </>
+              )}
+
+              {/* New address form for authenticated users with no addresses, or when useNewAddress is true */}
+              {isAuthenticated && (addresses.length === 0 || useNewAddress) && (
+                <div className="flex flex-col gap-3 rounded-lg border p-4">
+                  {useNewAddress && (
+                    <button
+                      onClick={() => setUseNewAddress(false)}
+                      className="mb-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <ArrowLeft className="size-3" /> Use saved address
+                    </button>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Country</label>
+                      <Input value={newAddrCountry} onChange={(e) => setNewAddrCountry(e.target.value)} readOnly className="bg-muted/50" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Region *</label>
+                      <select
+                        value={newAddrRegion}
+                        onChange={(e) => setNewAddrRegion(e.target.value)}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Select region</option>
+                        {TZ_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">City *</label>
+                      <Input placeholder="e.g. Kinondoni" value={newAddrCity} onChange={(e) => setNewAddrCity(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Postal Code</label>
+                      <Input placeholder="e.g. 14110" value={newAddrPostalCode} onChange={(e) => setNewAddrPostalCode(e.target.value)} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium">Street Address *</label>
+                    <Input placeholder="e.g. House No. 12, Mlimani Street" value={newAddrStreet} onChange={(e) => setNewAddrStreet(e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              {/* Guest shipping form */}
+              {isGuest && (
+                <div className="flex flex-col gap-4 rounded-lg border p-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">First Name *</label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input className="pl-8" placeholder="John" value={shipFirstName} onChange={(e) => setShipFirstName(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Last Name *</label>
+                      <Input placeholder="Doe" value={shipLastName} onChange={(e) => setShipLastName(e.target.value)} required />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Phone *</label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input className="pl-8" type="tel" placeholder="0712345678" value={shipPhone} onChange={(e) => setShipPhone(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Email</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input className="pl-8" type="email" placeholder="john@example.com" value={shipEmail} onChange={(e) => setShipEmail(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Country</label>
+                      <Input value={shipCountry} onChange={(e) => setShipCountry(e.target.value)} readOnly className="bg-muted/50" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Region *</label>
+                      <select
+                        value={shipRegion}
+                        onChange={(e) => setShipRegion(e.target.value)}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Select region</option>
+                        {TZ_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">City *</label>
+                      <Input placeholder="e.g. Kinondoni" value={shipCity} onChange={(e) => setShipCity(e.target.value)} required />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium">Postal Code</label>
+                      <Input placeholder="e.g. 14110" value={shipPostalCode} onChange={(e) => setShipPostalCode(e.target.value)} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium">Street Address *</label>
+                    <Input placeholder="e.g. House No. 12, Mlimani Street" value={shipStreet} onChange={(e) => setShipStreet(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium">Order Notes (Optional)</label>
+                    <Input placeholder="Any special delivery instructions?" value={shipNotes} onChange={(e) => setShipNotes(e.target.value)} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="save-info" checked={saveInfo} onCheckedChange={(v) => setSaveInfo(!!v)} />
+                    <label htmlFor="save-info" className="text-xs text-muted-foreground">
+                      Save my information for faster checkout next time
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* No addresses for authenticated user */}
+              {isAuthenticated && addresses.length === 0 && !useNewAddress && (
                 <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-8 text-center">
                   <MapPin className="size-8 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">No addresses found</p>
-                    <p className="text-xs text-muted-foreground">Add an address to proceed with checkout</p>
+                    <p className="text-xs text-muted-foreground">Add an address below to proceed</p>
                   </div>
-                  <Link href="/dashboard/user/addresses" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                  <Button variant="outline" size="sm" onClick={() => setUseNewAddress(true)}>
                     Add Address
-                  </Link>
+                  </Button>
                 </div>
-              ) : (
-                addresses.map((addr) => {
-                  const isSelected = selectedAddressId === addr.id
-                  return (
-                    <button
-                      key={addr.id}
-                      onClick={() => setSelectedAddressId(addr.id)}
-                      className={cn(
-                        "flex items-start gap-3 rounded-lg border p-4 text-left transition-all",
-                        isSelected
-                          ? "border-primary bg-primary/5 ring-1 ring-primary"
-                          : "border-border hover:border-primary/40"
-                      )}
-                    >
-                      <div className={cn(
-                        "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                        isSelected ? "border-primary bg-primary" : "border-muted-foreground/30"
-                      )}>
-                        {isSelected && <CheckCircle2 className="size-3 text-primary-foreground" />}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{addr.street}</span>
-                          {addr.is_default && (
-                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Default</span>
-                          )}
-                        </div>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {addr.city}, {addr.region}, {addr.country}
-                          {addr.postal_code ? ` • ${addr.postal_code}` : ""}
-                        </p>
-                      </div>
-                    </button>
-                  )
-                })
               )}
             </CardContent>
           </Card>
@@ -371,7 +663,6 @@ export default function CheckoutPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              {/* Payment type selector */}
               <div className="grid grid-cols-3 gap-3">
                 {PAYMENT_TYPES.map((type) => {
                   const isSelected = paymentMethod === type.value
@@ -405,7 +696,6 @@ export default function CheckoutPage() {
                 })}
               </div>
 
-              {/* MNO provider selector */}
               {paymentMethod === "mobile_money" && (
                 <div className="flex flex-col gap-3">
                   <div>
@@ -446,7 +736,6 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              {/* Card info banner */}
               {paymentMethod === "card" && (
                 <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
                   <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
@@ -456,7 +745,6 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              {/* COD info banner */}
               {paymentMethod === "cash_on_delivery" && (
                 <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
                   <Truck className="mt-0.5 size-4 shrink-0 text-blue-600" />
@@ -466,15 +754,16 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              {/* Order notes */}
-              <div>
-                <label className="mb-2 block text-sm font-medium">Order Notes (Optional)</label>
-                <Input
-                  placeholder="Any special instructions?"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
+              {isAuthenticated && !isGuest && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium">Order Notes (Optional)</label>
+                  <Input
+                    placeholder="Any special instructions?"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -502,7 +791,7 @@ export default function CheckoutPage() {
                 )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Shipping</span>
-                  <span className="font-medium">{shipping === 0 ? "Free" : formatPrice(shipping)}</span>
+                  <span className="font-medium">{shippingCost === 0 ? "Calculated after" : formatPrice(shippingCost)}</span>
                 </div>
               </div>
 
@@ -517,7 +806,7 @@ export default function CheckoutPage() {
                 size="lg"
                 className="w-full gap-2"
                 loading={placing}
-                disabled={placing || !selectedAddressId}
+                disabled={placing}
                 onClick={handlePlaceOrder}
               >
                 {placing ? (
@@ -525,7 +814,7 @@ export default function CheckoutPage() {
                 ) : (
                   <>
                     <Lock className="size-4" />
-                    Pay {formatPrice(total)}
+                    {isGuest ? "Place Order" : `Pay ${formatPrice(total)}`}
                   </>
                 )}
               </Button>
@@ -539,6 +828,16 @@ export default function CheckoutPage() {
                 <div className="flex items-center justify-center gap-2 rounded-lg bg-primary/5 p-3 text-sm text-primary">
                   <Loader2 className="size-4 animate-spin" />
                   Processing your payment securely...
+                </div>
+              )}
+
+              {isGuest && (
+                <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    You can checkout as a guest. Your shipping details will be used for this order.
+                    {saveInfo && " We'll save your cart for next time."}
+                  </span>
                 </div>
               )}
             </CardContent>

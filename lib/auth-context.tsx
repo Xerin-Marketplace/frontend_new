@@ -40,8 +40,8 @@ type AuthContextValue = {
     password: string
   }) => Promise<void>
   registerSeller: (data: Record<string, unknown>) => Promise<void>
-  sendOtp: (phone: string, purpose?: string) => Promise<void>
-  verifyOtp: (phone: string, otpCode: string, purpose?: string) => Promise<void>
+  sendOtp: (phone: string) => Promise<void>
+  verifyOtp: (phone: string, otpCode: string) => Promise<void>
   forgotPassword: (email: string) => Promise<void>
   resetPassword: (email: string, otpCode: string, newPassword: string) => Promise<void>
   logout: () => Promise<void>
@@ -73,9 +73,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setToken("access", res.access_token)
     setToken("refresh", res.refresh_token)
-    setUserData(res.user as Record<string, unknown>)
-    setUser(res.user)
-    return res.user
+    if (res.user) {
+      setUserData(res.user as Record<string, unknown>)
+      setUser(res.user)
+      return res.user
+    }
+    // If backend doesn't return user in token response, fetch it
+    const me = await api.get<AuthUser>("/users/me")
+    setUserData(me as Record<string, unknown>)
+    setUser(me)
+    return me
   }, [])
 
   const register = React.useCallback(
@@ -99,15 +106,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const sendOtp = React.useCallback(
-    async (phone: string, purpose?: string) => {
-      await api.post("/auth/send-otp", { phone, purpose })
+    async (phone: string) => {
+      await api.post("/auth/send-otp", { phone })
     },
     []
   )
 
   const verifyOtp = React.useCallback(
-    async (phone: string, otpCode: string, purpose?: string) => {
-      await api.post("/auth/verify-otp", { phone, otp_code: otpCode, purpose })
+    async (phone: string, otpCode: string) => {
+      await api.post("/auth/verify-otp", { phone, otp_code: otpCode })
     },
     []
   )

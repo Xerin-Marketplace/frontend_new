@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://api.xerinmarketplace.com/api/v1"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.xerinmarketplace.com/api/v1"
 
 type TokenType = "access" | "refresh"
 
@@ -76,10 +76,23 @@ async function request<T>(
     headers["Authorization"] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+    })
+  } catch (networkErr) {
+    console.error(`[API NETWORK ERROR] ${options.method || "GET"} ${path}`, {
+      url: `${API_BASE_URL}${path}`,
+      error: networkErr,
+      message: networkErr instanceof Error ? networkErr.message : String(networkErr),
+    })
+    throw {
+      status: 0,
+      detail: `Cannot connect to API at ${API_BASE_URL}. Is the backend running?`,
+    } as ApiError
+  }
 
   if (res.status === 401 && retry) {
     const refreshed = await refreshAccessToken()
@@ -96,16 +109,24 @@ async function request<T>(
   if (!res.ok) {
     let detail = "Something went wrong"
     let errors: Record<string, string[]> | undefined
+    let rawBody: unknown = null
     try {
-      const body = await res.json()
-      detail = body.detail || body.message || detail
-      errors = body.errors
-      if (Array.isArray(body.detail)) {
-        detail = body.detail.map((e: { msg: string }) => e.msg).join(", ")
+      rawBody = await res.json()
+      detail = (rawBody as { detail?: string; message?: string })?.detail || (rawBody as { message?: string })?.message || detail
+      errors = (rawBody as { errors?: Record<string, string[]> })?.errors
+      if (Array.isArray((rawBody as { detail?: unknown })?.detail)) {
+        detail = ((rawBody as { detail: { msg: string }[] }).detail).map((e) => e.msg).join(", ")
       }
     } catch {
       // response had no body
     }
+    // Log full error details to console for debugging
+    console.error(`[API ERROR] ${options.method || "GET"} ${path} → ${res.status} ${res.statusText}`, {
+      url: `${API_BASE_URL}${path}`,
+      detail,
+      errors,
+      rawBody,
+    })
     throw { status: res.status, detail, errors } as ApiError
   }
 

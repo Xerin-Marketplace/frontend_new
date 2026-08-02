@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -284,12 +284,10 @@ export default function SellerDashboardPage() {
             Welcome back! Here&apos;s what&apos;s happening with your store today.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/seller/products/new">
-            <Plus className="size-4" />
-            Add Product
-          </Link>
-        </Button>
+        <Link href="/dashboard/seller/products/new" className={buttonVariants()}>
+          <Plus className="size-4" />
+          Add Product
+        </Link>
       </div>
 
       {/* Stats Grid */}
@@ -455,9 +453,9 @@ export default function SellerDashboardPage() {
               <CardTitle>Recent Orders</CardTitle>
               <CardDescription>Latest orders from your store</CardDescription>
             </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/dashboard/seller/orders">View All</Link>
-            </Button>
+            <Link href="/dashboard/seller/orders" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              View All
+            </Link>
           </div>
         </CardHeader>
         <CardContent>

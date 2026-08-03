@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   Shield,
+  ShieldCheck,
   LayoutDashboard,
   Users,
   Store,
@@ -13,6 +14,9 @@ import {
   RefreshCw,
   BarChart3,
   Settings,
+  KeyRound,
+  ScrollText,
+  Lock,
   type LucideIcon,
 } from "lucide-react"
 
@@ -27,6 +31,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/lib/auth-context"
 
 const adminData = {
   user: {
@@ -129,15 +134,72 @@ const adminData = {
   ],
 }
 
+const superAdminExtras = {
+  navMain: [
+    {
+      title: "Roles & Permissions",
+      url: "/dashboard/admin/roles",
+      icon: KeyRound,
+      items: [
+        { title: "All Roles", url: "/dashboard/admin/roles" },
+        { title: "All Permissions", url: "/dashboard/admin/permissions" },
+      ],
+    },
+    {
+      title: "Admin Management",
+      url: "/dashboard/admin/admins",
+      icon: ShieldCheck,
+      items: [
+        { title: "All Admins", url: "/dashboard/admin/admins" },
+      ],
+    },
+    {
+      title: "Audit & Security",
+      url: "/dashboard/admin/audit-logs",
+      icon: ScrollText,
+      items: [
+        { title: "Audit Logs", url: "/dashboard/admin/audit-logs" },
+        { title: "Security Events", url: "/dashboard/admin/security-events" },
+      ],
+    },
+  ],
+  projects: [
+    {
+      name: "Audit Logs",
+      url: "/dashboard/admin/audit-logs",
+      icon: ScrollText,
+    },
+    {
+      name: "Security",
+      url: "/dashboard/admin/security-events",
+      icon: Lock,
+    },
+  ],
+}
+
 export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { isSuperAdmin } = useAuth()
+
+  const teams = isSuperAdmin
+    ? [{ name: "Xerin Market", logo: ShieldCheck, plan: "Super Admin" }]
+    : adminData.teams
+
+  const navMain = isSuperAdmin
+    ? [...adminData.navMain, ...superAdminExtras.navMain]
+    : adminData.navMain
+
+  const projects = isSuperAdmin
+    ? [...adminData.projects, ...superAdminExtras.projects]
+    : adminData.projects
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={adminData.teams} />
+        <TeamSwitcher teams={teams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={adminData.navMain} />
-        <NavProjects projects={adminData.projects} />
+        <NavMain items={navMain} />
+        <NavProjects projects={projects} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={adminData.user} />

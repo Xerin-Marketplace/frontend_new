@@ -71,6 +71,11 @@ const pageTitles: Record<string, string> = {
   "/dashboard/admin/wallets/payouts": "Payout Requests",
   "/dashboard/admin/refunds": "Refunds",
   "/dashboard/admin/settings": "Settings",
+  "/dashboard/admin/roles": "Roles & Permissions",
+  "/dashboard/admin/permissions": "All Permissions",
+  "/dashboard/admin/admins": "Admin Management",
+  "/dashboard/admin/audit-logs": "Audit Logs",
+  "/dashboard/admin/security-events": "Security Events",
   // User
   "/dashboard/user": "Overview",
   "/dashboard/user/become-seller": "Become a Seller",

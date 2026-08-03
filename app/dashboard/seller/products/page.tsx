@@ -288,7 +288,7 @@ export default function SellerProductsPage() {
   if (loading) {
     return (
       <PageSkeleton>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => <StatsCardSkeleton key={i} />)}
         </div>
         <Card>
@@ -319,7 +319,7 @@ export default function SellerProductsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Products</CardTitle>

@@ -178,7 +178,7 @@ export default function RolesPermissionsPage() {
     return (
       <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
@@ -200,7 +200,7 @@ export default function RolesPermissionsPage() {
       </div>
 
       {/* Role Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {roles.map((role) => {
           const isSelected = role.id === selectedRoleId
           const icon = role.name === "super_admin" ? ShieldCheck : role.name === "admin" ? Shield : KeyRound

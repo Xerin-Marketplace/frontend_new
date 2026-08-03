@@ -183,7 +183,7 @@ export default function AdminOverviewPage() {
   if (loading) {
     return (
       <PageSkeleton>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => <StatsCardSkeleton key={i} />)}
         </div>
         <Skeleton className="h-64 w-full" />
@@ -264,7 +264,7 @@ export default function AdminOverviewPage() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card className="opacity-0-init animate-fade-in-up">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Gross Sales</CardTitle>
@@ -308,7 +308,7 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* Secondary Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Avg Order Value</CardTitle>

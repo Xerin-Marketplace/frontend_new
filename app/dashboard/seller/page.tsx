@@ -213,7 +213,7 @@ export default function SellerDashboardPage() {
           </div>
           <Skeleton className="h-10 w-32" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => <StatsCardSkeleton key={i} />)}
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -291,7 +291,7 @@ export default function SellerDashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {stats.map((stat, i) => (
           <Card key={stat.title} className={`opacity-0-init animate-fade-in-up animation-delay-${i * 100}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

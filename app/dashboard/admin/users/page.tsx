@@ -181,18 +181,28 @@ export default function AdminUsersPage() {
   const [verifiedFilter, setVerifiedFilter] = React.useState<string>("")
   const pageSize = 10
 
-  const fetchUsers = React.useCallback(() => {
+  const fetchUsers = React.useCallback(async () => {
     setLoading(true)
-    // Fetch all users at once for client-side filtering, sorting, and pagination
-    api.get<PaginatedUsers>(`/admin/users?page=1&page_size=9999`)
-      .then((data) => {
-        setUsers(data.results)
-        setTotal(data.results.length)
-      })
-      .catch((err) => {
-        toast.add({ title: "Failed to load users", description: getApiError(err), type: "error" })
-      })
-      .finally(() => setLoading(false))
+    try {
+      // Fetch all users in batches of 100 (backend max page_size)
+      const allUsers: AdminUser[] = []
+      let currentPage = 1
+      let totalCount = 0
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const data = await api.get<PaginatedUsers>(`/admin/users?page=${currentPage}&page_size=100`)
+        allUsers.push(...data.results)
+        totalCount = data.total
+        if (allUsers.length >= totalCount || data.results.length === 0) break
+        currentPage++
+      }
+      setUsers(allUsers)
+      setTotal(allUsers.length)
+    } catch (err) {
+      toast.add({ title: "Failed to load users", description: getApiError(err), type: "error" })
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   React.useEffect(() => { fetchUsers() }, [fetchUsers])

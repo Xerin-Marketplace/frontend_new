@@ -57,10 +57,14 @@ import {
   Filter,
   Users,
   MapPin,
+  UserPlus,
+  CheckCircle2,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 import { useRouter } from "next/navigation"
+import { PhoneInput } from "@/components/ui/phone-input"
+import { cn } from "@/lib/utils"
 
 type Seller = {
   id: string
@@ -86,6 +90,12 @@ type KycDocument = {
   status: string
   rejection_reason: string | null
   uploaded_at: string
+}
+
+type BusinessCategory = {
+  id: string
+  name: string
+  description: string | null
 }
 
 type SortField = "business_name" | "contact_email" | "contact_phone" | "status" | "created"
@@ -195,6 +205,19 @@ export default function AdminSellersPage() {
   const [rejectSeller, setRejectSeller] = React.useState<Seller | null>(null)
   const [rejectReason, setRejectReason] = React.useState("")
   const [actionLoading, setActionLoading] = React.useState(false)
+  const [registerOpen, setRegisterOpen] = React.useState(false)
+  const [categories, setCategories] = React.useState<BusinessCategory[]>([])
+  const [regForm, setRegForm] = React.useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    password: "",
+    business_name: "",
+  })
+  const [selectedCategoryIds, setSelectedCategoryIds] = React.useState<string[]>([])
+  const [regErrors, setRegErrors] = React.useState<Record<string, string>>({})
+  const [regLoading, setRegLoading] = React.useState(false)
   const pageSize = 10
 
   const fetchSellers = React.useCallback(() => {
@@ -327,6 +350,109 @@ export default function AdminSellersPage() {
     }
   }
 
+  const openRegisterDialog = () => {
+    setRegisterOpen(true)
+    setRegErrors({})
+    setSelectedCategoryIds([])
+    setRegForm({ first_name: "", last_name: "", email: "", phone: "", password: "", business_name: "" })
+    if (categories.length === 0) {
+      api.get<BusinessCategory[]>("/admin/business-categories")
+        .then(setCategories)
+        .catch(() => {})
+    }
+  }
+
+  const toggleCategory = (id: string) => {
+    setSelectedCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    )
+  }
+
+  const handleRegisterSeller = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setRegErrors({})
+
+    const errs: Record<string, string> = {}
+    if (!regForm.first_name.trim()) errs.first_name = "First name is required"
+    if (!regForm.last_name.trim()) errs.last_name = "Last name is required"
+    if (!regForm.business_name.trim()) errs.business_name = "Business name is required"
+    if (!regForm.email.trim()) {
+      errs.email = "Email is required"
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regForm.email.trim())) {
+      errs.email = "Please enter a valid email address"
+    }
+    if (!regForm.phone.trim()) {
+      errs.phone = "Phone number is required"
+    } else if (regForm.phone.trim().length < 8) {
+      errs.phone = "Please enter a valid phone number"
+    }
+    if (!regForm.password) {
+      errs.password = "Password is required"
+    } else if (regForm.password.length < 10) {
+      errs.password = "Password must be at least 10 characters"
+    }
+    if (selectedCategoryIds.length === 0) {
+      errs.business_category_ids = "Please select at least one business category"
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setRegErrors(errs)
+      return
+    }
+
+    setRegLoading(true)
+    try {
+      await api.post("/auth/register-seller", {
+        first_name: regForm.first_name.trim(),
+        last_name: regForm.last_name.trim(),
+        email: regForm.email.trim().toLowerCase(),
+        phone: regForm.phone.trim(),
+        password: regForm.password,
+        business_name: regForm.business_name.trim(),
+        business_category_ids: selectedCategoryIds,
+        agreement_accepted: true,
+      })
+      toast.add({
+        title: "Seller registered!",
+        description: `${regForm.business_name} has been registered successfully.`,
+        type: "success",
+      })
+      setRegisterOpen(false)
+      fetchSellers()
+    } catch (err) {
+      const apiErr = err as ApiError
+      if (apiErr?.errors) {
+        const fieldErrs: Record<string, string> = {}
+        for (const [key, val] of Object.entries(apiErr.errors)) {
+          fieldErrs[key] = Array.isArray(val) ? val[0] : val
+        }
+        setRegErrors(fieldErrs)
+      }
+      const status = apiErr?.status ?? 0
+      let title = "Registration failed"
+      let description = getApiError(err)
+      if (status === 500) {
+        title = "Server error"
+        description = "Our servers are having issues. Please try again in a moment."
+      } else if (status === 0) {
+        title = "Connection error"
+        description = "Cannot reach the server. Please check your internet and try again."
+      } else if (status === 400) {
+        const detail = apiErr?.detail || ""
+        if (typeof detail === "string" && detail.includes("already exists")) {
+          title = "Account exists"
+          description = "An account with this email or phone already exists."
+        }
+      } else if (status === 429) {
+        title = "Too many attempts"
+        description = "Please wait a moment before trying again."
+      }
+      toast.add({ title, description, type: "error" })
+    } finally {
+      setRegLoading(false)
+    }
+  }
+
   if (loading && sellers.length === 0) {
     return (
       <PageSkeleton>
@@ -370,6 +496,9 @@ export default function AdminSellersPage() {
           <p className="text-sm text-muted-foreground">Manage all sellers and approve pending applications ({sellers.length} total).</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button onClick={openRegisterDialog}>
+            <UserPlus className="size-4" /> Register Seller
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -659,6 +788,147 @@ export default function AdminSellersPage() {
               <X className="size-4" /> Reject Seller
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Register Seller Dialog */}
+      <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="size-5" /> Register New Seller
+            </DialogTitle>
+            <DialogDescription>
+              Create a new seller account. The seller will receive an OTP for verification.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRegisterSeller}>
+            <FieldGroup>
+              {/* Personal Info */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="reg-first-name">First Name *</FieldLabel>
+                  <Input
+                    id="reg-first-name"
+                    value={regForm.first_name}
+                    onChange={(e) => setRegForm({ ...regForm, first_name: e.target.value })}
+                    className={cn(regErrors.first_name && "border-red-500")}
+                    placeholder="John"
+                  />
+                  {regErrors.first_name && <p className="text-xs text-red-500">{regErrors.first_name}</p>}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="reg-last-name">Last Name *</FieldLabel>
+                  <Input
+                    id="reg-last-name"
+                    value={regForm.last_name}
+                    onChange={(e) => setRegForm({ ...regForm, last_name: e.target.value })}
+                    className={cn(regErrors.last_name && "border-red-500")}
+                    placeholder="Doe"
+                  />
+                  {regErrors.last_name && <p className="text-xs text-red-500">{regErrors.last_name}</p>}
+                </Field>
+              </div>
+
+              {/* Contact */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="reg-email">Email *</FieldLabel>
+                  <Input
+                    id="reg-email"
+                    type="email"
+                    value={regForm.email}
+                    onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                    className={cn(regErrors.email && "border-red-500")}
+                    placeholder="seller@example.com"
+                  />
+                  {regErrors.email && <p className="text-xs text-red-500">{regErrors.email}</p>}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="reg-phone">Phone *</FieldLabel>
+                  <PhoneInput
+                    id="reg-phone"
+                    value={regForm.phone}
+                    onChange={(val) => setRegForm({ ...regForm, phone: val })}
+                  />
+                  {regErrors.phone && <p className="text-xs text-red-500">{regErrors.phone}</p>}
+                </Field>
+              </div>
+
+              {/* Password */}
+              <Field>
+                <FieldLabel htmlFor="reg-password">Password *</FieldLabel>
+                <Input
+                  id="reg-password"
+                  type="password"
+                  value={regForm.password}
+                  onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
+                  className={cn(regErrors.password && "border-red-500")}
+                  placeholder="Minimum 10 characters"
+                />
+                {regErrors.password && <p className="text-xs text-red-500">{regErrors.password}</p>}
+              </Field>
+
+              {/* Business Name */}
+              <Field>
+                <FieldLabel htmlFor="reg-business-name">Business Name *</FieldLabel>
+                <Input
+                  id="reg-business-name"
+                  value={regForm.business_name}
+                  onChange={(e) => setRegForm({ ...regForm, business_name: e.target.value })}
+                  className={cn(regErrors.business_name && "border-red-500")}
+                  placeholder="Acme Trading Co."
+                />
+                {regErrors.business_name && <p className="text-xs text-red-500">{regErrors.business_name}</p>}
+              </Field>
+
+              {/* Business Categories */}
+              <Field>
+                <FieldLabel>Business Categories *</FieldLabel>
+                <p className="text-xs text-muted-foreground">Select at least one category.</p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {categories.length === 0 ? (
+                    <span className="text-sm text-muted-foreground">Loading categories...</span>
+                  ) : (
+                    categories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => toggleCategory(cat.id)}
+                        className={cn(
+                          "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                          selectedCategoryIds.includes(cat.id)
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input bg-background hover:bg-muted"
+                        )}
+                      >
+                        {selectedCategoryIds.includes(cat.id) && <CheckCircle2 className="size-3" />}
+                        {cat.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+                {regErrors.business_category_ids && <p className="text-xs text-red-500">{regErrors.business_category_ids}</p>}
+              </Field>
+
+              {/* Agreement (auto-accepted by admin) */}
+              <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3">
+                <CheckCircle2 className="size-4 mt-0.5 text-green-600 shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  By registering this seller, you confirm that the seller has agreed to the{" "}
+                  <a href="/terms/seller" className="underline underline-offset-4">Seller Agreement</a>{" "}
+                  and{" "}
+                  <a href="/privacy" className="underline underline-offset-4">Privacy Policy</a>.
+                </p>
+              </div>
+            </FieldGroup>
+            <DialogFooter className="mt-4">
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button type="submit" loading={regLoading}>
+                <UserPlus className="size-4" /> Register Seller
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

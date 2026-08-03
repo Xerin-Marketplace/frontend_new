@@ -28,6 +28,14 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   Field,
   FieldGroup,
   FieldLabel,
@@ -40,10 +48,19 @@ import {
   Search,
   Pencil,
   Trash2,
-  Shield,
+  Eye,
+  FileDown,
+  FileText,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
+import { useRouter } from "next/navigation"
 
 type AdminUser = {
   id: string
@@ -63,12 +80,91 @@ type PaginatedUsers = {
   results: AdminUser[]
 }
 
+type SortField = "name" | "email" | "phone" | "status" | "verified" | "created"
+type SortDir = "asc" | "desc"
+
 function getApiError(err: unknown): string {
   const e = err as ApiError
   return e?.detail || "Something went wrong. Please try again."
 }
 
+function exportToCSV(users: AdminUser[]) {
+  const headers = ["Name", "Email", "Phone", "Status", "Verified", "Created"]
+  const rows = users.map((u) => [
+    `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim(),
+    u.email,
+    u.phone ?? "",
+    u.status,
+    u.is_verified ? "Verified" : "Unverified",
+    new Date(u.created_at).toLocaleDateString(),
+  ])
+  const csv = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n")
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = `users-export-${new Date().toISOString().slice(0, 10)}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+  toast.add({ title: "CSV exported", description: `${users.length} users exported.`, type: "success" })
+}
+
+function exportToPDF(users: AdminUser[]) {
+  const win = window.open("", "_blank")
+  if (!win) {
+    toast.add({ title: "Popup blocked", description: "Please allow popups to export PDF.", type: "error" })
+    return
+  }
+  const rows = users
+    .map(
+      (u, i) => `<tr>
+        <td>${i + 1}</td>
+        <td>${u.first_name ?? ""} ${u.last_name ?? ""}</td>
+        <td>${u.email}</td>
+        <td>${u.phone ?? "—"}</td>
+        <td>${u.status}</td>
+        <td>${u.is_verified ? "✓" : "✗"}</td>
+        <td>${new Date(u.created_at).toLocaleDateString()}</td>
+      </tr>`
+    )
+    .join("")
+  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<title>Users Export — ${new Date().toLocaleDateString()}</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; color: #1a1a1a; }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  .meta { color: #666; font-size: 13px; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; background: #f5f5f5; border-bottom: 2px solid #ddd; font-weight: 600; }
+  td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+  tr:nth-child(even) { background: #fafafa; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .verified { background: #dcfce7; color: #166534; }
+  .unverified { background: #fef3c7; color: #92400e; }
+  @media print { body { padding: 20px; } }
+</style>
+</head>
+<body>
+  <h1>Users Export Report</h1>
+  <div class="meta">Generated: ${new Date().toLocaleString()} · Total: ${users.length} users</div>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Verified</th><th>Created</th></tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <script>window.onload = () => window.print()</script>
+</body>
+</html>`)
+  win.document.close()
+}
+
 export default function AdminUsersPage() {
+  const router = useRouter()
   const [users, setUsers] = React.useState<AdminUser[]>([])
   const [total, setTotal] = React.useState(0)
   const [page, setPage] = React.useState(1)
@@ -79,6 +175,10 @@ export default function AdminUsersPage() {
   const [editUser, setEditUser] = React.useState<AdminUser | null>(null)
   const [deleteUser, setDeleteUser] = React.useState<AdminUser | null>(null)
   const [actionLoading, setActionLoading] = React.useState(false)
+  const [sortField, setSortField] = React.useState<SortField>("created")
+  const [sortDir, setSortDir] = React.useState<SortDir>("desc")
+  const [statusFilter, setStatusFilter] = React.useState<string>("")
+  const [verifiedFilter, setVerifiedFilter] = React.useState<string>("")
   const pageSize = 10
 
   const fetchUsers = React.useCallback(() => {
@@ -98,9 +198,64 @@ export default function AdminUsersPage() {
 
   React.useEffect(() => { fetchUsers() }, [fetchUsers])
 
-  const handleSearch = () => {
-    setSearch(searchInput)
-    setPage(1)
+  // Debounced AJAX search
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== search) {
+        setSearch(searchInput)
+        setPage(1)
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  // Client-side sorting + filtering
+  const processedUsers = React.useMemo(() => {
+    let result = [...users]
+
+    // Status filter
+    if (statusFilter) {
+      result = result.filter((u) => u.status === statusFilter)
+    }
+    // Verified filter
+    if (verifiedFilter === "verified") {
+      result = result.filter((u) => u.is_verified)
+    } else if (verifiedFilter === "unverified") {
+      result = result.filter((u) => !u.is_verified)
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let cmp = 0
+      switch (sortField) {
+        case "name":
+          cmp = `${a.first_name ?? ""} ${a.last_name ?? ""}`.localeCompare(`${b.first_name ?? ""} ${b.last_name ?? ""}`)
+          break
+        case "email":
+          cmp = a.email.localeCompare(b.email)
+          break
+        case "phone":
+          cmp = (a.phone ?? "").localeCompare(b.phone ?? "")
+          break
+        case "status":
+          cmp = a.status.localeCompare(b.status)
+          break
+        case "verified":
+          cmp = Number(a.is_verified) - Number(b.is_verified)
+          break
+        case "created":
+          cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          break
+      }
+      return sortDir === "asc" ? cmp : -cmp
+    })
+
+    return result
+  }, [users, sortField, sortDir, statusFilter, verifiedFilter])
+
+  const handleSort = (field: SortField, dir: SortDir) => {
+    setSortField(field)
+    setSortDir(dir)
   }
 
   const handleCreate = async (data: { first_name: string; last_name: string; email: string; phone: string; password: string }) => {
@@ -163,10 +318,37 @@ export default function AdminUsersPage() {
   if (loading && users.length === 0) {
     return (
       <PageSkeleton>
-        <Card><TableSkeleton rows={10} cols={6} /></Card>
+        <Card><TableSkeleton rows={10} cols={7} /></Card>
       </PageSkeleton>
     )
   }
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="size-3 text-muted-foreground/50" />
+    return sortDir === "asc" ? <ArrowUp className="size-3 text-primary" /> : <ArrowDown className="size-3 text-primary" />
+  }
+
+  const SortMenu = ({ field, label }: { field: SortField; label: string }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+            {label} <SortIcon field={field} />
+          </button>
+        }
+      />
+      <DropdownMenuContent align="start" className="w-44">
+        <DropdownMenuLabel>Sort {label}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => handleSort(field, "asc")}>
+          <ArrowUp className="size-3.5" /> A to Z
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleSort(field, "desc")}>
+          <ArrowDown className="size-3.5" /> Z to A
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -175,28 +357,86 @@ export default function AdminUsersPage() {
           <h2 className="text-2xl font-bold tracking-tight">Users</h2>
           <p className="text-sm text-muted-foreground">Manage all platform users ({total} total).</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="size-4" /> Add User
-        </Button>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline">
+                  <FileDown className="size-4" /> Export
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel>Export {total} users</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => exportToCSV(users)}>
+                <FileDown className="size-4" /> Export as CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportToPDF(users)}>
+                <FileText className="size-4" /> Export as PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" /> Add User
+          </Button>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="size-4" /> All Users
             </CardTitle>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Search users..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-64"
-              />
-              <Button variant="outline" size="sm" onClick={handleSearch}>
-                <Search className="size-4" />
-              </Button>
+            <div className="flex items-center gap-2">
+              {/* Status filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button variant="outline" size="sm" className={statusFilter ? "border-primary" : ""}>
+                      <Filter className="size-3.5" /> {statusFilter || "Status"}
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setStatusFilter("")}>All</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("active")}>Active</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("pending_verification")}>Pending</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("suspended")}>Suspended</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Verified filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button variant="outline" size="sm" className={verifiedFilter ? "border-primary" : ""}>
+                      <Filter className="size-3.5" /> {verifiedFilter || "Verified"}
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuLabel>Filter by Verification</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setVerifiedFilter("")}>All</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setVerifiedFilter("verified")}>Verified</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setVerifiedFilter("unverified")}>Unverified</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* AJAX Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search users..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="pl-9 w-64"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -204,23 +444,23 @@ export default function AdminUsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Verified</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead><SortMenu field="name" label="Name" /></TableHead>
+                <TableHead><SortMenu field="email" label="Email" /></TableHead>
+                <TableHead><SortMenu field="phone" label="Phone" /></TableHead>
+                <TableHead><SortMenu field="status" label="Status" /></TableHead>
+                <TableHead><SortMenu field="verified" label="Verified" /></TableHead>
+                <TableHead><SortMenu field="created" label="Created" /></TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.length === 0 ? (
+              {processedUsers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No users found.</TableCell>
                 </TableRow>
               ) : (
-                users.map((u) => (
-                  <TableRow key={u.id}>
+                processedUsers.map((u) => (
+                  <TableRow key={u.id} className="transition-colors hover:bg-muted/30">
                     <TableCell className="font-medium">
                       {u.first_name ?? ""} {u.last_name ?? ""}
                     </TableCell>
@@ -237,6 +477,9 @@ export default function AdminUsersPage() {
                     <TableCell className="text-muted-foreground text-xs">{new Date(u.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon-sm" onClick={() => router.push(`/dashboard/admin/users/${u.id}`)}>
+                          <Eye className="size-4" />
+                        </Button>
                         <Button variant="ghost" size="icon-sm" disabled={actionLoading} onClick={() => setEditUser(u)}>
                           <Pencil className="size-4" />
                         </Button>
@@ -255,14 +498,14 @@ export default function AdminUsersPage() {
           {totalPages > 1 && (
             <div className="mt-4 flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Page {page} of {totalPages}
+                Page {page} of {totalPages} · {total} total
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" disabled={page === 1 || loading} onClick={() => setPage(page - 1)}>
-                  Previous
+                  <ChevronLeft className="size-4" /> Prev
                 </Button>
                 <Button variant="outline" size="sm" disabled={page === totalPages || loading} onClick={() => setPage(page + 1)}>
-                  Next
+                  Next <ChevronRight className="size-4" />
                 </Button>
               </div>
             </div>

@@ -56,6 +56,7 @@ import {
   ChevronRight,
   Filter,
   Users,
+  MapPin,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
@@ -186,6 +187,7 @@ export default function AdminSellersPage() {
   const [sortField, setSortField] = React.useState<SortField>("created")
   const [sortDir, setSortDir] = React.useState<SortDir>("desc")
   const [statusFilter, setStatusFilter] = React.useState("")
+  const [locationFilter, setLocationFilter] = React.useState("")
   const [page, setPage] = React.useState(1)
   const [viewSeller, setViewSeller] = React.useState<Seller | null>(null)
   const [sellerDocs, setSellerDocs] = React.useState<KycDocument[]>([])
@@ -237,6 +239,16 @@ export default function AdminSellersPage() {
       result = result.filter((s) => s.status === statusFilter)
     }
 
+    // Location filter
+    if (locationFilter) {
+      const lf = locationFilter.toLowerCase()
+      result = result.filter((s) =>
+        (s.business_city ?? "").toLowerCase().includes(lf) ||
+        (s.business_region ?? "").toLowerCase().includes(lf) ||
+        (s.business_country ?? "").toLowerCase().includes(lf)
+      )
+    }
+
     // Sort
     result.sort((a, b) => {
       let cmp = 0
@@ -261,7 +273,7 @@ export default function AdminSellersPage() {
     })
 
     return result
-  }, [sellers, search, statusFilter, sortField, sortDir])
+  }, [sellers, search, statusFilter, locationFilter, sortField, sortDir])
 
   const total = processedSellers.length
   const totalPages = Math.ceil(total / pageSize)
@@ -367,12 +379,12 @@ export default function AdminSellersPage() {
               }
             />
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel>Export {sellers.length} sellers</DropdownMenuLabel>
+              <DropdownMenuLabel>Export {total} sellers</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => exportToCSV(sellers)}>
+              <DropdownMenuItem onClick={() => exportToCSV(processedSellers)}>
                 <FileDown className="size-4" /> Export as CSV
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportToPDF(sellers)}>
+              <DropdownMenuItem onClick={() => exportToPDF(processedSellers)}>
                 <FileText className="size-4" /> Export as PDF
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -432,21 +444,47 @@ export default function AdminSellersPage() {
                 <DropdownMenuTrigger
                   render={
                     <Button variant="outline" size="sm" className={statusFilter ? "border-primary" : ""}>
-                      <Filter className="size-3.5" /> {statusFilter || "Status"}
+                      <Filter className="size-3.5" /> {statusFilter ? sellerStatusConfig[statusFilter]?.label ?? statusFilter : "Status"}
                     </Button>
                   }
                 />
                 <DropdownMenuContent align="end" className="w-44">
                   <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => { setStatusFilter(""); setPage(1) }}>All</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setStatusFilter("approved"); setPage(1) }}>Approved</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setStatusFilter("pending"); setPage(1) }}>Pending</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setStatusFilter("under_review"); setPage(1) }}>Under Review</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setStatusFilter("rejected"); setPage(1) }}>Rejected</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setStatusFilter("suspended"); setPage(1) }}>Suspended</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setStatusFilter(""); setPage(1) }}>
+                    <span className="flex items-center justify-between w-full">All <Badge variant="secondary" className="text-xs">{sellers.length}</Badge></span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setStatusFilter("approved"); setPage(1) }}>
+                    <span className="flex items-center justify-between w-full">Approved <Badge variant="default" className="text-xs">{sellers.filter((s) => s.status === "approved").length}</Badge></span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setStatusFilter("active"); setPage(1) }}>
+                    <span className="flex items-center justify-between w-full">Active <Badge variant="default" className="text-xs">{sellers.filter((s) => s.status === "active").length}</Badge></span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setStatusFilter("pending"); setPage(1) }}>
+                    <span className="flex items-center justify-between w-full">Pending <Badge variant="secondary" className="text-xs">{sellers.filter((s) => s.status === "pending").length}</Badge></span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setStatusFilter("under_review"); setPage(1) }}>
+                    <span className="flex items-center justify-between w-full">Under Review <Badge variant="secondary" className="text-xs">{sellers.filter((s) => s.status === "under_review").length}</Badge></span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setStatusFilter("rejected"); setPage(1) }}>
+                    <span className="flex items-center justify-between w-full">Rejected <Badge variant="destructive" className="text-xs">{sellers.filter((s) => s.status === "rejected").length}</Badge></span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setStatusFilter("suspended"); setPage(1) }}>
+                    <span className="flex items-center justify-between w-full">Suspended <Badge variant="destructive" className="text-xs">{sellers.filter((s) => s.status === "suspended").length}</Badge></span>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Location filter */}
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Location..."
+                  value={locationFilter}
+                  onChange={(e) => { setLocationFilter(e.target.value); setPage(1) }}
+                  className="pl-8 w-40 text-xs h-8"
+                />
+              </div>
 
               {/* AJAX Search */}
               <div className="relative">

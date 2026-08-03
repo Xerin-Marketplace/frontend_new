@@ -183,35 +183,42 @@ export default function AdminUsersPage() {
 
   const fetchUsers = React.useCallback(() => {
     setLoading(true)
-    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
-    if (search) params.set("search", search)
-    api.get<PaginatedUsers>(`/admin/users?${params}`)
+    // Fetch all users at once for client-side filtering, sorting, and pagination
+    api.get<PaginatedUsers>(`/admin/users?page=1&page_size=9999`)
       .then((data) => {
         setUsers(data.results)
-        setTotal(data.total)
+        setTotal(data.results.length)
       })
       .catch((err) => {
         toast.add({ title: "Failed to load users", description: getApiError(err), type: "error" })
       })
       .finally(() => setLoading(false))
-  }, [page, search])
+  }, [])
 
   React.useEffect(() => { fetchUsers() }, [fetchUsers])
 
-  // Debounced AJAX search
+  // Debounced AJAX search (client-side)
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchInput !== search) {
-        setSearch(searchInput)
-        setPage(1)
-      }
+      setSearch(searchInput)
+      setPage(1)
     }, 400)
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  // Client-side sorting + filtering
+  // Client-side search + sorting + filtering
   const processedUsers = React.useMemo(() => {
     let result = [...users]
+
+    // Search (client-side)
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter((u) =>
+        `${u.first_name ?? ""} ${u.last_name ?? ""}`.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.phone ?? "").toLowerCase().includes(q)
+      )
+    }
 
     // Status filter
     if (statusFilter) {
@@ -251,7 +258,7 @@ export default function AdminUsersPage() {
     })
 
     return result
-  }, [users, sortField, sortDir, statusFilter, verifiedFilter])
+  }, [users, search, sortField, sortDir, statusFilter, verifiedFilter])
 
   const handleSort = (field: SortField, dir: SortDir) => {
     setSortField(field)
@@ -313,7 +320,9 @@ export default function AdminUsersPage() {
     }
   }
 
-  const totalPages = Math.ceil(total / pageSize)
+  const filteredTotal = processedUsers.length
+  const totalPages = Math.ceil(filteredTotal / pageSize)
+  const paginatedUsers = processedUsers.slice((page - 1) * pageSize, page * pageSize)
 
   if (loading && users.length === 0) {
     return (
@@ -367,12 +376,12 @@ export default function AdminUsersPage() {
               }
             />
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel>Export {total} users</DropdownMenuLabel>
+              <DropdownMenuLabel>Export {filteredTotal} users</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => exportToCSV(users)}>
+              <DropdownMenuItem onClick={() => exportToCSV(processedUsers)}>
                 <FileDown className="size-4" /> Export as CSV
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportToPDF(users)}>
+              <DropdownMenuItem onClick={() => exportToPDF(processedUsers)}>
                 <FileText className="size-4" /> Export as PDF
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -454,12 +463,12 @@ export default function AdminUsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {processedUsers.length === 0 ? (
+              {paginatedUsers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No users found.</TableCell>
                 </TableRow>
               ) : (
-                processedUsers.map((u) => (
+                paginatedUsers.map((u) => (
                   <TableRow key={u.id} className="transition-colors hover:bg-muted/30">
                     <TableCell className="font-medium">
                       {u.first_name ?? ""} {u.last_name ?? ""}
@@ -498,13 +507,13 @@ export default function AdminUsersPage() {
           {totalPages > 1 && (
             <div className="mt-4 flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Page {page} of {totalPages} · {total} total
+                Page {page} of {totalPages} · {filteredTotal} of {total} users
               </p>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page === 1 || loading} onClick={() => setPage(page - 1)}>
+                <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>
                   <ChevronLeft className="size-4" /> Prev
                 </Button>
-                <Button variant="outline" size="sm" disabled={page === totalPages || loading} onClick={() => setPage(page + 1)}>
+                <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(page + 1)}>
                   Next <ChevronRight className="size-4" />
                 </Button>
               </div>

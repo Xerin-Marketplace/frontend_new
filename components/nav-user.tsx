@@ -33,7 +33,7 @@ import {
 import { useAuth } from "@/lib/auth-context"
 
 export function NavUser({
-  user,
+  user: fallbackUser,
 }: {
   user: {
     name: string
@@ -42,8 +42,16 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const { logout } = useAuth()
+  const { logout, user: authUser } = useAuth()
   const router = useRouter()
+
+  const user = authUser
+    ? {
+        name: `${authUser.first_name} ${authUser.last_name}`.trim() || authUser.email,
+        email: authUser.email,
+        avatar: "/panda.png",
+      }
+    : fallbackUser
 
   const handleLogout = async () => {
     await logout()

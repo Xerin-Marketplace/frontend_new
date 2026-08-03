@@ -16,6 +16,7 @@ import {
   Truck,
   Shield,
   BarChart3,
+  Store,
   type LucideIcon,
 } from "lucide-react"
 
@@ -104,6 +105,11 @@ const userData = {
     },
   ],
   projects: [
+    {
+      name: "Become a Seller",
+      url: "/dashboard/user/become-seller",
+      icon: Store,
+    },
     {
       name: "Wishlist",
       url: "/dashboard/user/wishlist",

@@ -868,7 +868,7 @@ export default function CheckoutPage() {
                         </div>
                         <Input type="email" placeholder="Email" value={signUpEmail} onChange={(e) => setSignUpEmail(e.target.value)} required />
                         <Input type="tel" placeholder="Phone (e.g. 0712345678)" value={signUpPhone} onChange={(e) => setSignUpPhone(e.target.value)} required />
-                        <Input type="password" placeholder="Password (min 8 chars)" value={signUpPassword} onChange={(e) => setSignUpPassword(e.target.value)} required minLength={8} />
+                        <Input type="password" placeholder="Password (min 10 chars)" value={signUpPassword} onChange={(e) => setSignUpPassword(e.target.value)} required minLength={10} />
                         <Button type="submit" loading={authLoading} className="gap-2">
                           <Lock className="size-4" />
                           Create Account & Place Order

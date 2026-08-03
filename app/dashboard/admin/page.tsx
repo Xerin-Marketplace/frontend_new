@@ -26,6 +26,7 @@ import {
   Store,
   RefreshCw,
   Wallet,
+  AlertCircle,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, TableSkeleton, PageSkeleton } from "@/components/skeletons"
@@ -110,25 +111,33 @@ export default function AdminOverviewPage() {
   const [overview, setOverview] = React.useState<AnalyticsOverview | null>(null)
   const [sales, setSales] = React.useState<AnalyticsSeriesPoint[]>([])
   const [pendingSellers, setPendingSellers] = React.useState<SellerResponse[]>([])
+  const [analyticsError, setAnalyticsError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.get<AnalyticsOverview>("/analytics/admin/overview"),
       api.get<AnalyticsSeriesPoint[]>("/analytics/admin/sales"),
       api.get<PaginatedSellers>("/sellers/admin/pending?page=1&page_size=5"),
     ])
-      .then(([o, s, ps]) => {
-        setOverview(o)
-        setSales(s)
-        setPendingSellers(ps.results)
-      })
-      .catch((err) => {
-        toast.add({
-          title: "Failed to load admin overview",
-          description: getApiError(err),
-          type: "error",
-        })
+      .then(([oRes, sRes, psRes]) => {
+        if (oRes.status === "fulfilled") {
+          setOverview(oRes.value)
+        } else {
+          setAnalyticsError(getApiError(oRes.reason))
+        }
+        if (sRes.status === "fulfilled") {
+          setSales(sRes.value)
+        }
+        if (psRes.status === "fulfilled") {
+          setPendingSellers(psRes.value.results)
+        } else if (oRes.status === "rejected" && sRes.status === "rejected") {
+          toast.add({
+            title: "Failed to load admin overview",
+            description: getApiError(psRes.reason),
+            type: "error",
+          })
+        }
       })
       .finally(() => setLoading(false))
   }, [])
@@ -162,6 +171,17 @@ export default function AdminOverviewPage() {
         <h2 className="text-2xl font-bold tracking-tight">Admin Overview</h2>
         <p className="text-sm text-muted-foreground">Platform-wide metrics and pending actions.</p>
       </div>
+
+      {/* Analytics Permission Error */}
+      {analyticsError && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/50">
+          <AlertCircle className="size-5 shrink-0 text-amber-600" />
+          <div className="flex flex-col">
+            <span className="font-semibold text-amber-800 dark:text-amber-200">Analytics unavailable</span>
+            <span className="text-sm text-amber-700 dark:text-amber-300">{analyticsError}</span>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

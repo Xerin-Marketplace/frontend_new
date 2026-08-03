@@ -10,7 +10,7 @@ type PasswordStrengthProps = {
 }
 
 const requirements = [
-  { label: "At least 8 characters", test: (pw: string) => pw.length >= 8 },
+  { label: "At least 10 characters", test: (pw: string) => pw.length >= 10 },
   { label: "One uppercase letter (A-Z)", test: (pw: string) => /[A-Z]/.test(pw) },
   { label: "One number (0-9)", test: (pw: string) => /[0-9]/.test(pw) },
 ]

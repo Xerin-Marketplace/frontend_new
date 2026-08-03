@@ -97,8 +97,8 @@ export default function ForgotPasswordPage() {
       toast.add({ title: "Passwords don't match", type: "error" })
       return
     }
-    if (newPassword.length < 8) {
-      toast.add({ title: "Password too short", description: "At least 8 characters required.", type: "error" })
+    if (newPassword.length < 10) {
+      toast.add({ title: "Password too short", description: "At least 10 characters required.", type: "error" })
       return
     }
     setLoading(true)

@@ -45,6 +45,31 @@ type AuthContextValue = {
     password: string
   }) => Promise<void>
   registerSeller: (data: Record<string, unknown>) => Promise<void>
+  applyToBecomeSeller: (data: {
+    business_name: string
+    business_category_ids: string[]
+    business_description?: string
+    business_country?: string
+    business_region?: string
+    business_city?: string
+    business_address?: string
+    product_description?: string
+    years_in_business?: string
+    website_url?: string
+    contact_email?: string
+    contact_phone?: string
+    agreement_accepted: boolean
+  }) => Promise<void>
+  getSellerApplicationStatus: () => Promise<{
+    has_application: boolean
+    seller_id?: string
+    status?: string
+    business_name?: string
+    can_access_seller_dashboard?: boolean
+    can_upload_kyc?: boolean
+    submitted_at?: string
+    approved_at?: string
+  }>
   sendOtp: (phone: string) => Promise<void>
   verifyOtp: (phone: string, otpCode: string) => Promise<void>
   forgotPassword: (email: string) => Promise<void>
@@ -178,6 +203,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   )
 
+  const applyToBecomeSeller = React.useCallback(
+    async (data: {
+      business_name: string
+      business_category_ids: string[]
+      business_description?: string
+      business_country?: string
+      business_region?: string
+      business_city?: string
+      business_address?: string
+      product_description?: string
+      years_in_business?: string
+      website_url?: string
+      contact_email?: string
+      contact_phone?: string
+      agreement_accepted: boolean
+    }) => {
+      await api.post("/sellers/apply", data)
+    },
+    []
+  )
+
+  const getSellerApplicationStatus = React.useCallback(async () => {
+    return await api.get<{
+      has_application: boolean
+      seller_id?: string
+      status?: string
+      business_name?: string
+      can_access_seller_dashboard?: boolean
+      can_upload_kyc?: boolean
+      submitted_at?: string
+      approved_at?: string
+    }>("/sellers/application-status")
+  }, [])
+
   const sendOtp = React.useCallback(async (phone: string) => {
     await api.post("/auth/send-otp", { phone })
   }, [])
@@ -276,6 +335,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       registerSeller,
+      applyToBecomeSeller,
+      getSellerApplicationStatus,
       sendOtp,
       verifyOtp,
       forgotPassword,
@@ -283,7 +344,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       refreshUser,
     }),
-    [user, loading, isSeller, isAdmin, isSuperAdmin, hasPermission, hasRole, login, register, registerSeller, sendOtp, verifyOtp, forgotPassword, resetPassword, logout, refreshUser]
+    [user, loading, isSeller, isAdmin, isSuperAdmin, hasPermission, hasRole, login, register, registerSeller, applyToBecomeSeller, getSellerApplicationStatus, sendOtp, verifyOtp, forgotPassword, resetPassword, logout, refreshUser]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

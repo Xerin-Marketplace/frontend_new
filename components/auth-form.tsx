@@ -542,7 +542,7 @@ function AuthFormInner({
                       if (regErrors.password) setRegErrors((p) => ({ ...p, password: "" }))
                     }}
                     required
-                    minLength={8}
+                    minLength={10}
                   />
                   <button
                     type="button"
@@ -726,7 +726,7 @@ function AuthFormInner({
                       if (sellerErrors.password) setSellerErrors((p) => ({ ...p, password: "" }))
                     }}
                     required
-                    minLength={8}
+                    minLength={10}
                   />
                   <button
                     type="button"

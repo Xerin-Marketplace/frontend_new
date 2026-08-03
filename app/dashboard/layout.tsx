@@ -73,6 +73,7 @@ const pageTitles: Record<string, string> = {
   "/dashboard/admin/settings": "Settings",
   // User
   "/dashboard/user": "Overview",
+  "/dashboard/user/become-seller": "Become a Seller",
   "/dashboard/user/orders": "Orders",
   "/dashboard/user/orders/tracking": "Track Shipment",
   "/dashboard/user/orders/returns": "Returns & Refunds",

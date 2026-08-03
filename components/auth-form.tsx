@@ -15,13 +15,19 @@ import {
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Mail, Lock, User, Store, Eye, EyeOff, ShieldCheck, ArrowLeft, Phone } from "lucide-react"
+import { Mail, Lock, User, Store, Eye, EyeOff, ShieldCheck, ArrowLeft, Phone, CheckCircle2 } from "lucide-react"
 import { PhoneInput } from "@/components/ui/phone-input"
 import { useAuth, type ApiError } from "@/lib/auth-context"
 import { api } from "@/lib/api"
 import { PasswordStrength } from "@/components/password-strength"
 
 type AuthMode = "login" | "register" | "seller" | "otp"
+
+type BusinessCategory = {
+  id: string
+  name: string
+  description: string | null
+}
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -120,7 +126,30 @@ function AuthFormInner({
   const [sellerPhone, setSellerPhone] = useState("")
   const [sellerPassword, setSellerPassword] = useState("")
   const [sellerAgreement, setSellerAgreement] = useState(false)
+  const [categories, setCategories] = useState<BusinessCategory[]>([])
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([])
+  const [categoryError, setCategoryError] = useState(false)
   const [sellerErrors, setSellerErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (mode === "seller" && categories.length === 0) {
+      api.get<BusinessCategory[]>("/admin/business-categories")
+        .then((data) => {
+          setCategories(data)
+          setCategoryError(false)
+        })
+        .catch(() => {
+          setCategories([])
+          setCategoryError(true)
+        })
+    }
+  }, [mode, categories.length])
+
+  const toggleCategory = (id: string) => {
+    setSelectedCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    )
+  }
 
   // Clear errors when switching tabs
   const handleTabChange = (v: string) => {
@@ -233,6 +262,14 @@ function AuthFormInner({
   const handleSellerRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setSellerErrors({})
+    if (selectedCategoryIds.length === 0) {
+      toast.add({
+        title: "Select categories",
+        description: "Please select at least one business category.",
+        type: "warning",
+      })
+      return
+    }
     if (!sellerAgreement) {
       toast.add({ title: "Please accept the Seller Agreement", type: "warning" })
       return
@@ -246,6 +283,7 @@ function AuthFormInner({
         phone: sellerPhone,
         password: sellerPassword,
         business_name: sellerBusinessName,
+        business_category_ids: selectedCategoryIds,
         agreement_accepted: true,
       })
       toast.add({
@@ -643,6 +681,35 @@ function AuthFormInner({
                   required
                 />
                 {sellerErrors.phone && <FieldDescription className="text-red-500">{sellerErrors.phone}</FieldDescription>}
+              </Field>
+              <Field>
+                <FieldLabel>Business Categories</FieldLabel>
+                <FieldDescription>Select at least one category for your business.</FieldDescription>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {categoryError ? (
+                    <span className="text-sm text-red-500">Failed to load categories. Please refresh the page.</span>
+                  ) : categories.length === 0 ? (
+                    <span className="text-sm text-muted-foreground">Loading categories...</span>
+                  ) : (
+                    categories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => toggleCategory(cat.id)}
+                        className={cn(
+                          "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                          selectedCategoryIds.includes(cat.id)
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input bg-background hover:bg-muted"
+                        )}
+                      >
+                        {selectedCategoryIds.includes(cat.id) && <CheckCircle2 className="size-3" />}
+                        {cat.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+                {sellerErrors.business_category_ids && <FieldDescription className="text-red-500">{sellerErrors.business_category_ids}</FieldDescription>}
               </Field>
               <Field>
                 <FieldLabel htmlFor="seller-password">Password</FieldLabel>

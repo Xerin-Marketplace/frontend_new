@@ -131,7 +131,7 @@ export default function SellerKYCPage() {
       const formData = new FormData()
       formData.append("document_type", docType)
       formData.append("file", file)
-      const newDoc = await api.post<KycDocument>("/sellers/kyc-documents", formData)
+      const newDoc = await api.upload<KycDocument>("/sellers/kyc-documents", formData)
       setDocuments((prev) => [newDoc, ...prev])
       setUploadOpen(false)
       toast.add({

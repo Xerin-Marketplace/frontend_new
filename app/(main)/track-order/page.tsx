@@ -6,13 +6,12 @@ import { Package, Search, Truck, CheckCircle2, Clock, MapPin, ShoppingBag, Alert
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 import Link from "next/link"
+import { api, type ApiError } from "@/lib/api"
 
 export const metadata: Metadata = {
   title: "Track Order — XerinMarket",
   description: "Track your XerinMarket order in real-time. Enter your order ID to see delivery status and tracking details.",
 }
-
-const API = process.env.NEXT_PUBLIC_API_URL || "https://api.xerinmarketplace.com/api/v1"
 
 const statusSteps = [
   { key: "pending", label: "Order Placed", icon: ShoppingBag, description: "Your order has been received" },
@@ -91,28 +90,19 @@ export default function TrackOrderPage() {
     setOrder(null)
 
     try {
-      const token = localStorage.getItem("access_token")
-      const resp = await fetch(`${API}/orders/${orderId.trim()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-
-      if (resp.status === 404) {
-        setError("Order not found. Please check your Order ID and try again.")
-        return
-      }
-      if (resp.status === 401 || resp.status === 403) {
-        setError("Please log in to track your order.")
-        return
-      }
-      if (!resp.ok) {
-        setError("Unable to fetch order details. Please try again later.")
-        return
-      }
-
-      const data = await resp.json()
+      const data = await api.get<typeof order>(`/orders/${orderId.trim()}`)
       setOrder(data)
-    } catch {
-      setError("Network error. Please check your connection and try again.")
+    } catch (err) {
+      const e = err as ApiError
+      if (e?.status === 404) {
+        setError("Order not found. Please check your Order ID and try again.")
+      } else if (e?.status === 401 || e?.status === 403) {
+        setError("Please log in to track your order.")
+      } else if (e?.code === "NETWORK_ERROR" || e?.code === "TIMEOUT") {
+        setError("Network error. Please check your connection and try again.")
+      } else {
+        setError(e?.detail || "Unable to fetch order details. Please try again later.")
+      }
     } finally {
       setLoading(false)
     }

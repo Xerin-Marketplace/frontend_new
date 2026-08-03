@@ -67,8 +67,10 @@ export default function UserPaymentsPage() {
   const [search, setSearch] = React.useState("")
 
   React.useEffect(() => {
-    api.get<Order[]>("/orders/my-orders?limit=100")
-      .then(setOrders)
+    api.get<{ results: Order[]; total: number }>("/orders/my-orders?page=1&page_size=100")
+      .then((data) => {
+        setOrders(Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [])
+      })
       .catch((err) => {
         toast.add({ title: "Failed to load payment history", description: getApiError(err), type: "error" })
       })

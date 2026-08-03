@@ -80,8 +80,10 @@ export default function UserOrdersPage() {
   const [viewOrder, setViewOrder] = React.useState<Order | null>(null)
 
   React.useEffect(() => {
-    api.get<Order[]>("/orders/my-orders?limit=50")
-      .then(setOrders)
+    api.get<{ results: Order[]; total: number }>("/orders/my-orders?page=1&page_size=50")
+      .then((data) => {
+        setOrders(Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [])
+      })
       .catch((err) => {
         toast.add({ title: "Failed to load orders", description: getApiError(err), type: "error" })
       })

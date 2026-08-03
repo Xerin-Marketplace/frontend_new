@@ -36,14 +36,22 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart"
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
   CartesianGrid,
   XAxis,
   YAxis,
+  Legend,
 } from "recharts"
 
 type AnalyticsMoneySummary = {
@@ -98,6 +106,26 @@ type PaginatedSellers = {
   results: SellerResponse[]
 }
 
+type AnalyticsRankingRow = {
+  id: string
+  name: string
+  amount: number
+  order_count: number
+  units: number
+}
+
+type ReconciliationResponse = {
+  currency: string
+  gross_sales: number
+  commission_revenue: number
+  seller_net_earnings: number
+  refunds_completed: number
+  payouts_completed: number
+  pending_wallet_balance: number
+  available_wallet_balance: number
+  pending_payout_amount: number
+}
+
 function formatPrice(price: number): string {
   return `TSh ${Number(price).toLocaleString()}`
 }
@@ -111,6 +139,8 @@ export default function AdminOverviewPage() {
   const [overview, setOverview] = React.useState<AnalyticsOverview | null>(null)
   const [sales, setSales] = React.useState<AnalyticsSeriesPoint[]>([])
   const [pendingSellers, setPendingSellers] = React.useState<SellerResponse[]>([])
+  const [topSellers, setTopSellers] = React.useState<AnalyticsRankingRow[]>([])
+  const [topProducts, setTopProducts] = React.useState<AnalyticsRankingRow[]>([])
   const [analyticsError, setAnalyticsError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
 
@@ -119,8 +149,10 @@ export default function AdminOverviewPage() {
       api.get<AnalyticsOverview>("/analytics/admin/overview"),
       api.get<AnalyticsSeriesPoint[]>("/analytics/admin/sales"),
       api.get<PaginatedSellers>("/sellers/admin/pending?page=1&page_size=5"),
+      api.get<AnalyticsRankingRow[]>("/analytics/admin/sellers?limit=5"),
+      api.get<AnalyticsRankingRow[]>("/analytics/admin/products?limit=5"),
     ])
-      .then(([oRes, sRes, psRes]) => {
+      .then(([oRes, sRes, psRes, tsRes, tpRes]) => {
         if (oRes.status === "fulfilled") {
           setOverview(oRes.value)
         } else {
@@ -137,6 +169,12 @@ export default function AdminOverviewPage() {
             description: getApiError(psRes.reason),
             type: "error",
           })
+        }
+        if (tsRes.status === "fulfilled") {
+          setTopSellers(tsRes.value)
+        }
+        if (tpRes.status === "fulfilled") {
+          setTopProducts(tpRes.value)
         }
       })
       .finally(() => setLoading(false))
@@ -158,11 +196,53 @@ export default function AdminOverviewPage() {
     period: s.period,
     amount: Number(s.amount),
     orders: s.order_count,
+    units: s.units,
   }))
 
   const chartConfig = {
     amount: { label: "Revenue", color: "hsl(var(--chart-1))" },
     orders: { label: "Orders", color: "hsl(var(--chart-2))" },
+    units: { label: "Units", color: "hsl(var(--chart-3))" },
+  } satisfies ChartConfig
+
+  // Order breakdown for donut chart
+  const orderBreakdown = [
+    { name: "Paid", value: overview?.counts.paid_orders ?? 0, color: "hsl(var(--chart-1))" },
+    { name: "Refunded", value: overview?.counts.refunded_orders ?? 0, color: "#ef4444" },
+    { name: "Pending", value: Math.max(0, (overview?.counts.orders ?? 0) - (overview?.counts.paid_orders ?? 0) - (overview?.counts.refunded_orders ?? 0)), color: "hsl(var(--chart-3))" },
+  ]
+
+  // Revenue breakdown for donut chart
+  const revenueBreakdown = [
+    { name: "Commission Revenue", value: Number(overview?.money.commission_revenue ?? 0), color: "hsl(var(--chart-1))" },
+    { name: "Seller Earnings", value: Number(overview?.money.seller_net_earnings ?? 0), color: "hsl(var(--chart-2))" },
+    { name: "Refunds", value: Number(overview?.money.refunds_completed ?? 0), color: "#ef4444" },
+  ]
+
+  // Top sellers bar chart data
+  const topSellersData = topSellers.map((s) => ({
+    name: s.name.length > 15 ? s.name.slice(0, 12) + "..." : s.name,
+    fullName: s.name,
+    revenue: Number(s.amount),
+    orders: s.order_count,
+  }))
+
+  // Top products bar chart data
+  const topProductsData = topProducts.map((p) => ({
+    name: p.name.length > 15 ? p.name.slice(0, 12) + "..." : p.name,
+    fullName: p.name,
+    revenue: Number(p.amount),
+    units: p.units,
+  }))
+
+  const donutConfig = {
+    value: { label: "Count" },
+  } satisfies ChartConfig
+
+  const barConfig = {
+    revenue: { label: "Revenue", color: "hsl(var(--chart-1))" },
+    orders: { label: "Orders", color: "hsl(var(--chart-2))" },
+    units: { label: "Units", color: "hsl(var(--chart-3))" },
   } satisfies ChartConfig
 
   return (
@@ -268,30 +348,181 @@ export default function AdminOverviewPage() {
         </Card>
       </div>
 
-      {/* Sales Chart */}
+      {/* Sales Trend — Area Chart */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Sales Trend</CardTitle>
-          <CardDescription>Revenue and orders over time</CardDescription>
+          <CardDescription>Revenue, orders and units over time</CardDescription>
         </CardHeader>
         <CardContent>
           {chartData.length === 0 ? (
-            <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">No sales data available.</div>
+            <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">No sales data available.</div>
           ) : (
-            <ChartContainer config={chartConfig} className="h-[200px] w-full">
+            <ChartContainer config={chartConfig} className="h-[250px] w-full">
               <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
                 <defs>
                   <linearGradient id="adminFillAmount" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--color-amount)" stopOpacity={0.5} />
                     <stop offset="100%" stopColor="var(--color-amount)" stopOpacity={0.05} />
                   </linearGradient>
+                  <linearGradient id="adminFillOrders" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-orders)" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="var(--color-orders)" stopOpacity={0.02} />
+                  </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis dataKey="period" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} fontSize={11} />
+                <YAxis yAxisId="left" tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} fontSize={11} />
+                <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} fontSize={11} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Area yAxisId="left" type="monotone" dataKey="amount" stroke="var(--color-amount)" strokeWidth={2} fill="url(#adminFillAmount)" name="Revenue" />
+                <Area yAxisId="right" type="monotone" dataKey="orders" stroke="var(--color-orders)" strokeWidth={2} fill="url(#adminFillOrders)" name="Orders" />
+              </AreaChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Orders Bar Chart + Order Breakdown Donut */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">Orders & Units Over Time</CardTitle>
+            <CardDescription>Order count and units sold per period</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {chartData.length === 0 ? (
+              <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">No data available.</div>
+            ) : (
+              <ChartContainer config={chartConfig} className="h-[250px] w-full">
+                <BarChart data={chartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="period" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} fontSize={11} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={11} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="orders" fill="var(--color-orders)" radius={[4, 4, 0, 0]} name="Orders" />
+                  <Bar dataKey="units" fill="var(--color-units)" radius={[4, 4, 0, 0]} name="Units" />
+                </BarChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Order Breakdown</CardTitle>
+            <CardDescription>Paid vs refunded vs pending</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={donutConfig} className="h-[250px] w-full">
+              <PieChart>
+                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+                <Pie
+                  data={orderBreakdown}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={3}
+                  stroke="none"
+                >
+                  {orderBreakdown.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Legend
+                  verticalAlign="bottom"
+                  height={36}
+                  iconType="circle"
+                  formatter={(value) => <span className="text-xs">{value}</span>}
+                />
+              </PieChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Revenue Breakdown Donut + Top Sellers Bar */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Revenue Distribution</CardTitle>
+            <CardDescription>Commission vs seller earnings vs refunds</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={donutConfig} className="h-[250px] w-full">
+              <PieChart>
+                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+                <Pie
+                  data={revenueBreakdown}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={3}
+                  stroke="none"
+                >
+                  {revenueBreakdown.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Legend
+                  verticalAlign="bottom"
+                  height={36}
+                  iconType="circle"
+                  formatter={(value) => <span className="text-xs">{value}</span>}
+                />
+              </PieChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Store className="size-4" /> Top Sellers by Revenue
+            </CardTitle>
+            <CardDescription>Highest grossing sellers</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {topSellersData.length === 0 ? (
+              <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">No seller data available.</div>
+            ) : (
+              <ChartContainer config={barConfig} className="h-[250px] w-full">
+                <BarChart data={topSellersData} layout="vertical" margin={{ left: 20, right: 12, top: 8, bottom: 8 }}>
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                  <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} fontSize={11} />
+                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={100} fontSize={11} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[0, 4, 4, 0]} name="Revenue" />
+                </BarChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Products Bar Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Package className="size-4" /> Top Products by Revenue
+          </CardTitle>
+          <CardDescription>Best performing products</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {topProductsData.length === 0 ? (
+            <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">No product data available.</div>
+          ) : (
+            <ChartContainer config={barConfig} className="h-[250px] w-full">
+              <BarChart data={topProductsData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} />
                 <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} fontSize={11} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Area type="monotone" dataKey="amount" stroke="var(--color-amount)" strokeWidth={2} fill="url(#adminFillAmount)" name="Revenue" />
-              </AreaChart>
+                <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} name="Revenue" />
+                <Bar dataKey="units" fill="var(--color-units)" radius={[4, 4, 0, 0]} name="Units Sold" />
+              </BarChart>
             </ChartContainer>
           )}
         </CardContent>

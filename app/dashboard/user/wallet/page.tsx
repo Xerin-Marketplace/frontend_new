@@ -35,6 +35,9 @@ import {
   FieldDescription,
 } from "@/components/ui/field"
 import { toast } from "@/components/ui/toast"
+import { api, type ApiError } from "@/lib/api"
+import { Skeleton } from "@/components/ui/skeleton"
+import { PageSkeleton } from "@/components/skeletons"
 import {
   Wallet,
   TrendingUp,
@@ -44,10 +47,18 @@ import {
   Gift,
   ArrowUpRight,
   ArrowDownRight,
+  RefreshCw,
 } from "lucide-react"
 
 type TxType = "credit" | "debit"
 type TxStatus = "completed" | "pending" | "failed"
+
+type WalletData = {
+  id: string
+  balance: number
+  pending_balance: number
+  currency: string
+}
 
 type Transaction = {
   id: string
@@ -59,15 +70,6 @@ type Transaction = {
   created_at: string
 }
 
-const mockTransactions: Transaction[] = [
-  { id: "1", type: "credit", description: "Cashback from order #ORD-3918", amount: 1200, status: "completed", reference: "CB-001", created_at: "2025-07-28 10:30" },
-  { id: "2", type: "debit", description: "Used for order #ORD-3921", amount: 5000, status: "completed", reference: "WP-001", created_at: "2025-08-01 14:35" },
-  { id: "3", type: "credit", description: "Top-up via M-Pesa", amount: 50000, status: "completed", reference: "TP-001", created_at: "2025-07-25 09:00" },
-  { id: "4", type: "credit", description: "Cashback from order #ORD-3905", amount: 650, status: "completed", reference: "CB-002", created_at: "2025-07-20 11:10" },
-  { id: "5", type: "debit", description: "Used for order #ORD-3915", amount: 3000, status: "pending", reference: "WP-002", created_at: "2025-08-01 09:05" },
-  { id: "6", type: "credit", description: "Refund from order #ORD-3910", amount: 45000, status: "completed", reference: "RF-001", created_at: "2025-07-25 16:30" },
-]
-
 const statusConfig: Record<TxStatus, { label: string; variant: "default" | "secondary" | "destructive" }> = {
   completed: { label: "Completed", variant: "default" },
   pending: { label: "Pending", variant: "secondary" },
@@ -78,20 +80,50 @@ function formatPrice(price: number): string {
   return `TSh ${price.toLocaleString()}`
 }
 
+function getApiError(err: unknown): string {
+  const e = err as ApiError
+  return e?.detail || "Something went wrong. Please try again."
+}
+
 export default function UserWalletPage() {
-  const [transactions, setTransactions] = React.useState<Transaction[]>(mockTransactions)
+  const [wallet, setWallet] = React.useState<WalletData | null>(null)
+  const [transactions, setTransactions] = React.useState<Transaction[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [refreshing, setRefreshing] = React.useState(false)
   const [search, setSearch] = React.useState("")
   const [txFilter, setTxFilter] = React.useState<"all" | "credit" | "debit">("all")
   const [topupOpen, setTopupOpen] = React.useState(false)
+  const [topupLoading, setTopupLoading] = React.useState(false)
 
-  const balance = React.useMemo(() => {
-    const credits = transactions.filter((t) => t.type === "credit" && t.status === "completed").reduce((s, t) => s + t.amount, 0)
-    const debits = transactions.filter((t) => t.type === "debit" && t.status === "completed").reduce((s, t) => s + t.amount, 0)
-    return credits - debits
-  }, [transactions])
+  const fetchData = React.useCallback(async () => {
+    try {
+      const [walletData, txData] = await Promise.all([
+        api.get<WalletData>("/wallet/me"),
+        api.get<Transaction[]>("/wallet/me/transactions"),
+      ])
+      setWallet(walletData)
+      setTransactions(txData)
+    } catch (err) {
+      toast.add({ title: "Failed to load wallet", description: getApiError(err), type: "error" })
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const handleRefresh = () => {
+    setRefreshing(true)
+    fetchData()
+  }
+
+  const balance = wallet?.balance ?? 0
 
   const totalCashback = React.useMemo(() => {
-    return transactions.filter((t) => t.description.includes("Cashback") && t.status === "completed").reduce((s, t) => s + t.amount, 0)
+    return transactions.filter((t) => t.description?.toLowerCase().includes("cashback") && t.status === "completed").reduce((s, t) => s + t.amount, 0)
   }, [transactions])
 
   const filteredTx = React.useMemo(() => {
@@ -106,26 +138,58 @@ export default function UserWalletPage() {
     return result
   }, [transactions, search, txFilter])
 
-  const handleTopup = (amount: number, method: string) => {
-    const newTx: Transaction = {
-      id: crypto.randomUUID(),
-      type: "credit",
-      description: `Top-up via ${method}`,
-      amount,
-      status: "completed",
-      reference: `TP-${String(transactions.length + 1).padStart(3, "0")}`,
-      created_at: new Date().toISOString().split("T")[0] + " " + new Date().toTimeString().slice(0, 5),
+  const handleTopup = async (amount: number, method: string) => {
+    setTopupLoading(true)
+    try {
+      await api.post("/payments/initiate", {
+        amount,
+        currency: "TZS",
+        provider: method,
+        payment_type: "wallet_topup",
+      })
+      setTopupOpen(false)
+      toast.add({ title: "Top-up initiated!", description: `${formatPrice(amount)} top-up via ${method} is being processed.`, type: "success" })
+      fetchData()
+    } catch (err) {
+      toast.add({ title: "Top-up failed", description: getApiError(err), type: "error" })
+    } finally {
+      setTopupLoading(false)
     }
-    setTransactions((prev) => [newTx, ...prev])
-    setTopupOpen(false)
-    toast.add({ title: "Top-up successful!", description: `${formatPrice(amount)} added to your wallet via ${method}.`, type: "success" })
+  }
+
+  if (loading) {
+    return (
+      <PageSkeleton>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="size-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-28" />
+                <Skeleton className="mt-2 h-3 w-20" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Skeleton className="h-96 w-full" />
+      </PageSkeleton>
+    )
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">My Wallet</h2>
-        <p className="text-sm text-muted-foreground">Manage your wallet balance, top-up, and track cashback rewards.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">My Wallet</h2>
+          <p className="text-sm text-muted-foreground">Manage your wallet balance, top-up, and track cashback rewards.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+          <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Balance Cards */}
@@ -166,7 +230,7 @@ export default function UserWalletPage() {
         <Dialog open={topupOpen} onOpenChange={setTopupOpen}>
           <DialogTrigger render={<Button><Plus className="size-4" /> Top Up Wallet</Button>} />
           <DialogContent className="sm:max-w-[440px]">
-            <TopupForm balance={balance} onSubmit={handleTopup} />
+            <TopupForm balance={balance} onSubmit={handleTopup} loading={topupLoading} />
           </DialogContent>
         </Dialog>
       </div>
@@ -218,8 +282,8 @@ export default function UserWalletPage() {
                     <TableCell className={tx.type === "credit" ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
                       {tx.type === "credit" ? "+" : "-"}{formatPrice(tx.amount)}
                     </TableCell>
-                    <TableCell><Badge variant={statusConfig[tx.status].variant}>{statusConfig[tx.status].label}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{tx.created_at}</TableCell>
+                    <TableCell><Badge variant={statusConfig[tx.status]?.variant ?? "outline"}>{statusConfig[tx.status]?.label ?? tx.status}</Badge></TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{new Date(tx.created_at).toLocaleDateString()}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -234,9 +298,11 @@ export default function UserWalletPage() {
 function TopupForm({
   balance,
   onSubmit,
+  loading,
 }: {
   balance: number
   onSubmit: (amount: number, method: string) => void
+  loading: boolean
 }) {
   const [amount, setAmount] = React.useState("")
   const [method, setMethod] = React.useState("M-Pesa")
@@ -272,7 +338,13 @@ function TopupForm({
       </FieldGroup>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-        <Button type="submit"><Plus className="size-4" /> Top Up</Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? (
+            <><RefreshCw className="size-4 animate-spin" /> Processing...</>
+          ) : (
+            <><Plus className="size-4" /> Top Up</>
+          )}
+        </Button>
       </DialogFooter>
     </form>
   )

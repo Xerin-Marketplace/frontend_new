@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui/toast"
+import { api, type ApiError } from "@/lib/api"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Search,
   Heart,
@@ -20,6 +22,7 @@ import {
 
 type WishlistItem = {
   id: string
+  product_id: string
   product_name: string
   seller_name: string
   price: number
@@ -30,23 +33,30 @@ type WishlistItem = {
   added_at: string
 }
 
-const mockWishlist: WishlistItem[] = [
-  { id: "1", product_name: "Wireless Headphones", seller_name: "Acme Trading Co.", price: 85000, sale_price: 75000, rating: 4.5, in_stock: true, image: null, added_at: "2025-07-28" },
-  { id: "2", product_name: "Smart Watch Pro", seller_name: "TechWorld TZ", price: 120000, sale_price: null, rating: 4.8, in_stock: true, image: null, added_at: "2025-07-25" },
-  { id: "3", product_name: "Gaming Mouse", seller_name: "Gadget Hub", price: 45000, sale_price: 39000, rating: 4.2, in_stock: false, image: null, added_at: "2025-07-20" },
-  { id: "4", product_name: "HD Monitor 24\"", seller_name: "Acme Trading Co.", price: 350000, sale_price: null, rating: 4.7, in_stock: true, image: null, added_at: "2025-07-15" },
-  { id: "5", product_name: "Bluetooth Speaker", seller_name: "TechWorld TZ", price: 65000, sale_price: 55000, rating: 4.3, in_stock: true, image: null, added_at: "2025-07-10" },
-  { id: "6", product_name: "Webcam HD", seller_name: "Gadget Hub", price: 75000, sale_price: null, rating: 4.0, in_stock: true, image: null, added_at: "2025-07-05" },
-]
-
 function formatPrice(price: number): string {
   return `TSh ${price.toLocaleString()}`
 }
 
+function getApiError(err: unknown): string {
+  const e = err as ApiError
+  return e?.detail || "Something went wrong. Please try again."
+}
+
 export default function UserWishlistPage() {
-  const [items, setItems] = React.useState<WishlistItem[]>(mockWishlist)
+  const [items, setItems] = React.useState<WishlistItem[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [actionLoading, setActionLoading] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
   const [filter, setFilter] = React.useState<"all" | "in_stock" | "on_sale">("all")
+
+  React.useEffect(() => {
+    api.get<WishlistItem[]>("/products/wishlist")
+      .then(setItems)
+      .catch((err) => {
+        toast.add({ title: "Failed to load wishlist", description: getApiError(err), type: "error" })
+      })
+      .finally(() => setLoading(false))
+  }, [])
 
   const filtered = React.useMemo(() => {
     let result = items
@@ -62,18 +72,64 @@ export default function UserWishlistPage() {
     return result
   }, [items, search, filter])
 
-  const handleRemove = (id: string) => {
-    const item = items.find((i) => i.id === id)
-    setItems((prev) => prev.filter((i) => i.id !== id))
-    toast.add({ title: "Removed from wishlist", description: `${item?.product_name} has been removed.`, type: "success" })
+  const handleRemove = async (id: string) => {
+    setActionLoading(id)
+    try {
+      await api.delete(`/products/wishlist/${id}`)
+      setItems((prev) => prev.filter((i) => i.id !== id))
+      toast.add({ title: "Removed from wishlist", description: "Item has been removed.", type: "success" })
+    } catch (err) {
+      toast.add({ title: "Failed to remove", description: getApiError(err), type: "error" })
+    } finally {
+      setActionLoading(null)
+    }
   }
 
-  const handleAddToCart = (item: WishlistItem) => {
+  const handleAddToCart = async (item: WishlistItem) => {
     if (!item.in_stock) {
       toast.add({ title: "Out of stock", description: `${item.product_name} is currently unavailable.`, type: "error" })
       return
     }
-    toast.add({ title: "Added to cart!", description: `${item.product_name} has been added to your cart.`, type: "success" })
+    setActionLoading(item.id)
+    try {
+      await api.post("/cart/items", { product_id: item.product_id, quantity: 1 })
+      toast.add({ title: "Added to cart!", description: `${item.product_name} has been added to your cart.`, type: "success" })
+    } catch (err) {
+      toast.add({ title: "Failed to add to cart", description: getApiError(err), type: "error" })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="mt-2 h-4 w-64" />
+        </div>
+        <div className="flex gap-4">
+          <Skeleton className="h-9 w-64" />
+          <Skeleton className="h-9 w-32" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <Skeleton className="mb-3 aspect-square w-full rounded-lg" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="mt-2 h-3 w-1/2" />
+                <Skeleton className="mt-2 h-6 w-20" />
+                <div className="mt-3 flex gap-2">
+                  <Skeleton className="h-8 flex-1" />
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -158,12 +214,12 @@ export default function UserWishlistPage() {
                       size="sm"
                       className="flex-1"
                       onClick={() => handleAddToCart(item)}
-                      disabled={!item.in_stock}
+                      disabled={!item.in_stock || actionLoading === item.id}
                     >
                       <ShoppingCart className="size-3" />
-                      Add to Cart
+                      {actionLoading === item.id ? "Adding..." : "Add to Cart"}
                     </Button>
-                    <Button variant="ghost" size="icon-sm" onClick={() => handleRemove(item.id)} className="text-red-500" title="Remove">
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleRemove(item.id)} disabled={actionLoading === item.id} className="text-red-500" title="Remove">
                       <Trash2 className="size-4" />
                     </Button>
                   </div>

@@ -116,6 +116,7 @@ export default function SellerProductsPage() {
   const [deleteProduct, setDeleteProduct] = React.useState<Product | null>(null)
   const [sortBy, setSortBy] = React.useState<"name" | "price" | "created">("created")
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc")
+  const [actionLoading, setActionLoading] = React.useState(false)
 
   React.useEffect(() => {
     Promise.all([
@@ -174,6 +175,7 @@ export default function SellerProductsPage() {
     category_id: string
     description: string
   }) => {
+    setActionLoading(true)
     try {
       const newProduct = await api.post<Product>("/products", {
         name: data.name,
@@ -198,6 +200,8 @@ export default function SellerProductsPage() {
         description: getApiError(err),
         type: "error",
       })
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -209,6 +213,7 @@ export default function SellerProductsPage() {
     category_id: string
     description: string
   }) => {
+    setActionLoading(true)
     try {
       const updated = await api.patch<Product>(`/products/${id}`, {
         name: data.name,
@@ -232,6 +237,8 @@ export default function SellerProductsPage() {
         description: getApiError(err),
         type: "error",
       })
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -252,6 +259,8 @@ export default function SellerProductsPage() {
         description: getApiError(err),
         type: "error",
       })
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -271,6 +280,8 @@ export default function SellerProductsPage() {
         description: getApiError(err),
         type: "error",
       })
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -302,7 +313,7 @@ export default function SellerProductsPage() {
             render={<Button><Plus className="size-4" /> Add Product</Button>}
           />
           <DialogContent className="sm:max-w-[560px]">
-            <ProductForm categories={categories} onSubmit={handleCreate} />
+            <ProductForm categories={categories} onSubmit={handleCreate} actionLoading={actionLoading} />
           </DialogContent>
         </Dialog>
       </div>
@@ -447,6 +458,7 @@ export default function SellerProductsPage() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            disabled={actionLoading}
                             onClick={() => handleSubmitForReview(product.id)}
                             title="Submit for review"
                           >
@@ -456,6 +468,7 @@ export default function SellerProductsPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          disabled={actionLoading}
                           onClick={() => setEditProduct(product)}
                           title="Edit"
                         >
@@ -464,6 +477,7 @@ export default function SellerProductsPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          disabled={actionLoading}
                           onClick={() => setDeleteProduct(product)}
                           title="Delete"
                           className="text-red-500 hover:text-red-600"
@@ -488,6 +502,7 @@ export default function SellerProductsPage() {
               product={editProduct}
               categories={categories}
               onSubmit={(data) => handleUpdate(editProduct.id, data)}
+              actionLoading={actionLoading}
             />
           )}
         </DialogContent>
@@ -508,10 +523,11 @@ export default function SellerProductsPage() {
             </DialogClose>
             <Button
               variant="destructive"
+              disabled={actionLoading}
               onClick={() => deleteProduct && handleDelete(deleteProduct.id)}
             >
               <Trash2 className="size-4" />
-              Delete
+              {actionLoading ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -524,6 +540,7 @@ function ProductForm({
   product,
   categories,
   onSubmit,
+  actionLoading,
 }: {
   product?: Product
   categories: Category[]
@@ -535,6 +552,7 @@ function ProductForm({
     category_id: string
     description: string
   }) => void
+  actionLoading?: boolean
 }) {
   const [name, setName] = React.useState(product?.name ?? "")
   const [sku, setSku] = React.useState(product?.sku ?? "")
@@ -650,8 +668,8 @@ function ProductForm({
         <DialogClose render={<Button variant="outline" />}>
           Cancel
         </DialogClose>
-        <Button type="submit">
-          {product ? "Save Changes" : "Create Product"}
+        <Button type="submit" disabled={actionLoading}>
+          {actionLoading ? "Saving..." : product ? "Save Changes" : "Create Product"}
         </Button>
       </DialogFooter>
     </form>

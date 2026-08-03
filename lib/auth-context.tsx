@@ -198,7 +198,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const registerSeller = React.useCallback(
     async (data: Record<string, unknown>) => {
-      await api.post("/auth/register-seller", data)
+      let lastErr: unknown = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await api.post("/auth/register-seller", data)
+          return
+        } catch (err) {
+          lastErr = err
+          const apiErr = err as ApiError
+          if (apiErr?.status !== 500 && apiErr?.status !== 0) throw err
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+            continue
+          }
+        }
+      }
+      throw lastErr
     },
     []
   )

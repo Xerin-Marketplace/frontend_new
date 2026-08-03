@@ -262,27 +262,55 @@ function AuthFormInner({
   const handleSellerRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setSellerErrors({})
+
+    // Client-side validation
+    const errs: Record<string, string> = {}
+    if (!sellerFirstName.trim()) errs.first_name = "First name is required"
+    if (!sellerLastName.trim()) errs.last_name = "Last name is required"
+    if (!sellerBusinessName.trim()) errs.business_name = "Business name is required"
+    if (!sellerEmail.trim()) {
+      errs.email = "Email is required"
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sellerEmail.trim())) {
+      errs.email = "Please enter a valid email address"
+    }
+    if (!sellerPhone.trim()) {
+      errs.phone = "Phone number is required"
+    } else if (sellerPhone.trim().length < 8) {
+      errs.phone = "Please enter a valid phone number"
+    }
+    if (!sellerPassword) {
+      errs.password = "Password is required"
+    } else if (sellerPassword.length < 10) {
+      errs.password = "Password must be at least 10 characters"
+    }
     if (selectedCategoryIds.length === 0) {
+      errs.business_category_ids = "Please select at least one business category"
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setSellerErrors(errs)
       toast.add({
-        title: "Select categories",
-        description: "Please select at least one business category.",
+        title: "Please fix the errors",
+        description: "Some fields need your attention before submitting.",
         type: "warning",
       })
       return
     }
+
     if (!sellerAgreement) {
       toast.add({ title: "Please accept the Seller Agreement", type: "warning" })
       return
     }
+
     setLoading(true)
     try {
       await registerSeller({
-        first_name: sellerFirstName,
-        last_name: sellerLastName,
-        email: sellerEmail,
-        phone: sellerPhone,
+        first_name: sellerFirstName.trim(),
+        last_name: sellerLastName.trim(),
+        email: sellerEmail.trim().toLowerCase(),
+        phone: sellerPhone.trim(),
         password: sellerPassword,
-        business_name: sellerBusinessName,
+        business_name: sellerBusinessName.trim(),
         business_category_ids: selectedCategoryIds,
         agreement_accepted: true,
       })
@@ -301,11 +329,30 @@ function AuthFormInner({
         }
         setSellerErrors(fieldErrs)
       }
-      toast.add({
-        title: "Seller registration failed",
-        description: getApiError(err),
-        type: "error",
-      })
+
+      // Specific error messages based on status code
+      const status = apiErr?.status ?? 0
+      let title = "Seller registration failed"
+      let description = getApiError(err)
+
+      if (status === 500) {
+        title = "Server error"
+        description = "Our servers are having issues. Please try again in a moment."
+      } else if (status === 0) {
+        title = "Connection error"
+        description = "Cannot reach the server. Please check your internet and try again."
+      } else if (status === 400) {
+        const detail = apiErr?.detail || ""
+        if (detail.includes("already exists")) {
+          title = "Account exists"
+          description = "An account with this email or phone already exists. Try signing in instead."
+        }
+      } else if (status === 429) {
+        title = "Too many attempts"
+        description = "Please wait a moment before trying again."
+      }
+
+      toast.add({ title, description, type: "error" })
     } finally {
       setLoading(false)
     }

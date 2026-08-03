@@ -57,10 +57,18 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  KeyRound,
+  Lock,
+  Mail,
+  Check,
+  Copy,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 import { useRouter } from "next/navigation"
+import { cn } from "@/lib/utils"
 
 type AdminUser = {
   id: string
@@ -174,6 +182,7 @@ export default function AdminUsersPage() {
   const [createOpen, setCreateOpen] = React.useState(false)
   const [editUser, setEditUser] = React.useState<AdminUser | null>(null)
   const [deleteUser, setDeleteUser] = React.useState<AdminUser | null>(null)
+  const [resetUser, setResetUser] = React.useState<AdminUser | null>(null)
   const [actionLoading, setActionLoading] = React.useState(false)
   const [sortField, setSortField] = React.useState<SortField>("created")
   const [sortDir, setSortDir] = React.useState<SortDir>("desc")
@@ -325,6 +334,50 @@ export default function AdminUsersPage() {
       fetchUsers()
     } catch (err) {
       toast.add({ title: "Failed to delete user", description: getApiError(err), type: "error" })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleResetPassword = async (newPassword: string) => {
+    if (!resetUser) return
+    setActionLoading(true)
+    try {
+      await api.patch(`/admin/users/${resetUser.id}`, { password: newPassword })
+      toast.add({ title: "Password reset!", description: `Password for ${resetUser.first_name ?? resetUser.email} has been updated.`, type: "success" })
+      setResetUser(null)
+    } catch (err) {
+      toast.add({ title: "Failed to reset password", description: getApiError(err), type: "error" })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleSendResetEmail = async () => {
+    if (!resetUser) return
+    setActionLoading(true)
+    try {
+      await api.post("/auth/forgot-password", { email: resetUser.email })
+      toast.add({ title: "Reset email sent!", description: `A password reset link has been sent to ${resetUser.email}.`, type: "success" })
+    } catch (err) {
+      toast.add({ title: "Failed to send email", description: getApiError(err), type: "error" })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleToggleVerify = async (user: AdminUser) => {
+    setActionLoading(true)
+    try {
+      await api.patch(`/admin/users/${user.id}`, { is_verified: !user.is_verified })
+      toast.add({
+        title: user.is_verified ? "User unverified" : "User verified!",
+        description: `${user.first_name ?? user.email} is now ${user.is_verified ? "unverified" : "verified"}.`,
+        type: "success",
+      })
+      fetchUsers()
+    } catch (err) {
+      toast.add({ title: "Failed to update verification", description: getApiError(err), type: "error" })
     } finally {
       setActionLoading(false)
     }
@@ -489,20 +542,37 @@ export default function AdminUsersPage() {
                       <Badge variant={u.status === "active" ? "default" : "outline"}>{u.status}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={u.is_verified ? "default" : "secondary"}>
-                        {u.is_verified ? "Verified" : "Unverified"}
-                      </Badge>
+                      <button
+                        onClick={() => handleToggleVerify(u)}
+                        disabled={actionLoading}
+                        className="inline-flex items-center gap-1.5 transition-colors hover:opacity-80"
+                        title={u.is_verified ? "Click to unverify" : "Click to verify"}
+                      >
+                        <Badge variant={u.is_verified ? "default" : "secondary"}>
+                          {u.is_verified ? (
+                            <><CheckCircle2 className="size-3" /> Verified</>
+                          ) : (
+                            <><XCircle className="size-3" /> Unverified</>
+                          )}
+                        </Badge>
+                      </button>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">{new Date(u.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => router.push(`/dashboard/admin/users/${u.id}`)}>
+                        <Button variant="ghost" size="icon-sm" title="View Details" onClick={() => router.push(`/dashboard/admin/users/${u.id}`)}>
                           <Eye className="size-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" disabled={actionLoading} onClick={() => setEditUser(u)}>
+                        <Button variant="ghost" size="icon-sm" title={u.is_verified ? "Unverify" : "Verify"} disabled={actionLoading} onClick={() => handleToggleVerify(u)} className={u.is_verified ? "text-green-600" : "text-amber-500"}>
+                          {u.is_verified ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" title="Reset Password" disabled={actionLoading} onClick={() => setResetUser(u)}>
+                          <KeyRound className="size-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" title="Edit" disabled={actionLoading} onClick={() => setEditUser(u)}>
                           <Pencil className="size-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" disabled={actionLoading} onClick={() => setDeleteUser(u)} className="text-red-500">
+                        <Button variant="ghost" size="icon-sm" title="Delete" disabled={actionLoading} onClick={() => setDeleteUser(u)} className="text-red-500">
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
@@ -563,7 +633,176 @@ export default function AdminUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetUser} onOpenChange={(open) => !open && setResetUser(null)}>
+        <DialogContent className="sm:max-w-[460px]">
+          <ResetPasswordDialog
+            user={resetUser}
+            actionLoading={actionLoading}
+            onReset={handleResetPassword}
+            onSendEmail={handleSendResetEmail}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
+  )
+}
+
+function ResetPasswordDialog({
+  user,
+  actionLoading,
+  onReset,
+  onSendEmail,
+}: {
+  user: AdminUser | null
+  actionLoading: boolean
+  onReset: (password: string) => void
+  onSendEmail: () => void
+}) {
+  const [newPassword, setNewPassword] = React.useState("")
+  const [confirmPassword, setConfirmPassword] = React.useState("")
+  const [showPassword, setShowPassword] = React.useState(false)
+  const [generated, setGenerated] = React.useState(false)
+
+  const generatePassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%"
+    let pwd = ""
+    for (let i = 0; i < 12; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length))
+    setNewPassword(pwd)
+    setConfirmPassword(pwd)
+    setGenerated(true)
+  }
+
+  const copyPassword = () => {
+    navigator.clipboard.writeText(newPassword)
+    toast.add({ title: "Copied!", description: "Password copied to clipboard.", type: "success" })
+  }
+
+  const passwordsMatch = newPassword === confirmPassword
+  const isValid = newPassword.length >= 8 && passwordsMatch
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!isValid) return
+    onReset(newPassword)
+  }
+
+  // Reset state when dialog closes
+  React.useEffect(() => {
+    if (!user) {
+      setNewPassword("")
+      setConfirmPassword("")
+      setShowPassword(false)
+      setGenerated(false)
+    }
+  }, [user])
+
+  if (!user) return null
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <KeyRound className="size-4" /> Reset Password
+        </DialogTitle>
+        <DialogDescription>
+          Set a new password for <strong>{user.first_name ?? ""} {user.last_name ?? ""}</strong> ({user.email}) or send a reset link via email.
+        </DialogDescription>
+      </DialogHeader>
+
+      {/* User info banner */}
+      <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+          {(user.first_name ?? "?").charAt(0).toUpperCase()}{(user.last_name ?? "").charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{user.first_name ?? ""} {user.last_name ?? ""}</div>
+          <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+        </div>
+      </div>
+
+      <FieldGroup>
+        {/* Send reset email option */}
+        <div className="flex items-center justify-between rounded-lg border p-3">
+          <div className="flex items-center gap-2">
+            <Mail className="size-4 text-muted-foreground" />
+            <div>
+              <div className="text-sm font-medium">Send Reset Email</div>
+              <div className="text-xs text-muted-foreground">Send a password reset link to {user.email}</div>
+            </div>
+          </div>
+          <Button type="button" variant="outline" size="sm" disabled={actionLoading} onClick={onSendEmail}>
+            <Mail className="size-3.5" /> Send
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex-1 border-t border-dashed" />
+          <span className="text-xs text-muted-foreground">or set manually</span>
+          <div className="flex-1 border-t border-dashed" />
+        </div>
+
+        <Field>
+          <FieldLabel htmlFor="newPassword">New Password</FieldLabel>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="newPassword"
+                type={showPassword ? "text" : "password"}
+                className="pl-9"
+                value={newPassword}
+                onChange={(e) => { setNewPassword(e.target.value); setGenerated(false) }}
+                placeholder="Min 8 characters"
+                minLength={8}
+                required
+              />
+            </div>
+            <Button type="button" variant="outline" size="icon" title={showPassword ? "Hide" : "Show"} onClick={() => setShowPassword(!showPassword)}>
+              {showPassword ? <Eye className="size-4" /> : <Lock className="size-4" />}
+            </Button>
+            {generated && (
+              <Button type="button" variant="outline" size="icon" title="Copy" onClick={copyPassword}>
+                <Copy className="size-4" />
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <FieldDescription>At least 8 characters</FieldDescription>
+            <Button type="button" variant="ghost" size="sm" className="h-6 text-xs" onClick={generatePassword}>
+              <Check className="size-3" /> Generate
+            </Button>
+          </div>
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="confirmPassword">Confirm Password</FieldLabel>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="confirmPassword"
+              type={showPassword ? "text" : "password"}
+              className={cn("pl-9", confirmPassword && !passwordsMatch && "border-destructive")}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter password"
+              required
+            />
+          </div>
+          {confirmPassword && !passwordsMatch && (
+            <p className="text-xs text-destructive">Passwords do not match</p>
+          )}
+        </Field>
+      </FieldGroup>
+
+      <DialogFooter>
+        <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+        <Button type="submit" disabled={actionLoading || !isValid}>
+          <KeyRound className="size-4" /> {actionLoading ? "Resetting..." : "Reset Password"}
+        </Button>
+      </DialogFooter>
+    </form>
   )
 }
 

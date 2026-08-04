@@ -97,6 +97,7 @@ type WalletTransaction = {
 
 type Order = {
   id: string
+  user_id: string
   order_number: string | null
   total: number
   status: string
@@ -105,6 +106,7 @@ type Order = {
 
 type PayoutRequest = {
   id: string
+  seller_id: string
   amount: number
   currency: string
   status: string
@@ -124,6 +126,7 @@ type AdminActivityLog = {
 
 type Refund = {
   id: string
+  requested_by_id: string
   status: string
   total_amount: number
   currency: string
@@ -176,15 +179,14 @@ export default function UserDetailPage() {
           const found = sellersRes.value.find((s) => s.user_id === userId)
           if (found) {
             setSeller(found)
-            // Fetch wallet, transactions, payouts for this seller
+            // The Gateway exposes admin wallet and payout collections. Filter
+            // them by the selected seller; never use the current-admin /me APIs.
             const sellerId = found.id
-            const [walletRes, txRes, payoutRes] = await Promise.allSettled([
+            const [walletRes, payoutRes] = await Promise.allSettled([
               api.get<SellerWallet[]>(`/wallet/admin/wallets`).then((wallets) => wallets.find((w) => w.seller_id === sellerId) || null),
-              api.get<WalletTransaction[]>(`/wallet/me/transactions`).catch(() => []),
-              api.get<PayoutRequest[]>(`/wallet/me/payouts`).catch(() => []),
+              api.get<PayoutRequest[]>(`/wallet/admin/payouts`).then((items) => items.filter((item) => item.seller_id === sellerId)),
             ])
             if (walletRes.status === "fulfilled" && walletRes.value) setWallet(walletRes.value)
-            if (txRes.status === "fulfilled") setTransactions(txRes.value)
             if (payoutRes.status === "fulfilled") setPayouts(payoutRes.value)
           }
         }
@@ -192,17 +194,12 @@ export default function UserDetailPage() {
         // Fetch orders for this user
         const ordersRes = await api.get<{ results: Order[]; total: number }>(`/orders/admin/all?page=1&page_size=10`).catch(() => null)
         if (ordersRes) {
-          // Filter orders by user_id if the API returns them
-          setOrders(ordersRes.results || [])
+          setOrders((ordersRes.results || []).filter((order) => order.user_id === userId))
         }
 
         // Fetch refunds
         const refundsRes = await api.get<Refund[]>(`/refunds/admin`).catch(() => null)
-        if (refundsRes) setRefunds(refundsRes.slice(0, 5))
-
-        // Fetch activity logs for admin users
-        const logsRes = await api.get<AdminActivityLog[]>(`/admin/dashboard/activity-logs?limit=10`).catch(() => null)
-        if (logsRes) setActivityLogs(logsRes)
+        if (refundsRes) setRefunds(refundsRes.filter((refund) => refund.requested_by_id === userId).slice(0, 5))
       })
       .finally(() => setLoading(false))
   }, [userId])

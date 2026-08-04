@@ -61,6 +61,7 @@ import {
   CheckCircle2,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 import { useRouter } from "next/navigation"
 import { PhoneInput } from "@/components/ui/phone-input"
@@ -189,6 +190,10 @@ function exportToPDF(sellers: Seller[]) {
 }
 
 export default function AdminSellersPage() {
+  const { hasPermission, isSuperAdmin } = useAuth()
+  const canApprove = isSuperAdmin || hasPermission("can_approve_sellers")
+  const canReject = isSuperAdmin || hasPermission("can_reject_sellers")
+  const canRegisterSeller = isSuperAdmin || hasPermission("can_create_users")
   const router = useRouter()
   const [sellers, setSellers] = React.useState<Seller[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -496,9 +501,9 @@ export default function AdminSellersPage() {
           <p className="text-sm text-muted-foreground">Manage all sellers and approve pending applications ({sellers.length} total).</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={openRegisterDialog}>
+          {canRegisterSeller && <Button onClick={openRegisterDialog}>
             <UserPlus className="size-4" /> Register Seller
-          </Button>
+          </Button>}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -676,14 +681,14 @@ export default function AdminSellersPage() {
                         <Button variant="ghost" size="icon-sm" title="View Full Profile" onClick={() => router.push(`/dashboard/admin/sellers/${s.id}`)}>
                           <Store className="size-4" />
                         </Button>
-                        {(s.status === "pending" || s.status === "under_review") && (
+                        {(s.status === "pending" || s.status === "under_review") && (canApprove || canReject) && (
                           <>
-                            <Button variant="ghost" size="icon-sm" disabled={actionLoading} title="Approve" className="text-green-600" onClick={() => handleApprove(s)}>
+                            {canApprove && <Button variant="ghost" size="icon-sm" disabled={actionLoading} title="Approve" className="text-green-600" onClick={() => handleApprove(s)}>
                               <Check className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon-sm" disabled={actionLoading} title="Reject" className="text-red-500" onClick={() => setRejectSeller(s)}>
+                            </Button>}
+                            {canReject && <Button variant="ghost" size="icon-sm" disabled={actionLoading} title="Reject" className="text-red-500" onClick={() => setRejectSeller(s)}>
                               <X className="size-4" />
-                            </Button>
+                            </Button>}
                           </>
                         )}
                       </div>
@@ -756,14 +761,14 @@ export default function AdminSellersPage() {
               )}
             </div>
           </div>
-          {viewSeller && (viewSeller.status === "pending" || viewSeller.status === "under_review") && (
+          {viewSeller && (viewSeller.status === "pending" || viewSeller.status === "under_review") && (canApprove || canReject) && (
             <DialogFooter>
-              <Button variant="outline" disabled={actionLoading} onClick={() => setRejectSeller(viewSeller)}>
+              {canReject && <Button variant="outline" disabled={actionLoading} onClick={() => setRejectSeller(viewSeller)}>
                 <X className="size-4" /> Reject
-              </Button>
-              <Button disabled={actionLoading} onClick={() => handleApprove(viewSeller)}>
+              </Button>}
+              {canApprove && <Button disabled={actionLoading} onClick={() => handleApprove(viewSeller)}>
                 <Check className="size-4" /> Approve Seller
-              </Button>
+              </Button>}
             </DialogFooter>
           )}
         </DialogContent>

@@ -41,6 +41,7 @@ import {
   Eye,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 
 type Product = {
@@ -83,6 +84,9 @@ function getApiError(err: unknown): string {
 }
 
 export default function AdminProductsPage() {
+  const { hasPermission, isSuperAdmin } = useAuth()
+  const canApprove = isSuperAdmin || hasPermission("can_approve_products")
+  const canReject = isSuperAdmin || hasPermission("can_reject_products")
   const [products, setProducts] = React.useState<Product[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
@@ -244,14 +248,14 @@ export default function AdminProductsPage() {
                         <Button variant="ghost" size="icon-sm" title="View" onClick={() => setViewProduct(p)}>
                           <Eye className="size-4" />
                         </Button>
-                        {p.status === "pending_review" && (
+                        {p.status === "pending_review" && (canApprove || canReject) && (
                           <>
-                            <Button variant="ghost" size="icon-sm" disabled={actionLoading} title="Approve" className="text-green-600" onClick={() => handleApprove(p)}>
+                            {canApprove && <Button variant="ghost" size="icon-sm" disabled={actionLoading} title="Approve" className="text-green-600" onClick={() => handleApprove(p)}>
                               <Check className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon-sm" disabled={actionLoading} title="Reject" className="text-red-500" onClick={() => setRejectProduct(p)}>
+                            </Button>}
+                            {canReject && <Button variant="ghost" size="icon-sm" disabled={actionLoading} title="Reject" className="text-red-500" onClick={() => setRejectProduct(p)}>
                               <X className="size-4" />
-                            </Button>
+                            </Button>}
                           </>
                         )}
                       </div>
@@ -292,14 +296,14 @@ export default function AdminProductsPage() {
               </div>
             </div>
           )}
-          {viewProduct?.status === "pending_review" && (
+          {viewProduct?.status === "pending_review" && (canApprove || canReject) && (
             <DialogFooter>
-              <Button variant="outline" disabled={actionLoading} onClick={() => setRejectProduct(viewProduct)}>
+              {canReject && <Button variant="outline" disabled={actionLoading} onClick={() => setRejectProduct(viewProduct)}>
                 <X className="size-4" /> Reject
-              </Button>
-              <Button disabled={actionLoading} onClick={() => handleApprove(viewProduct)}>
+              </Button>}
+              {canApprove && <Button disabled={actionLoading} onClick={() => handleApprove(viewProduct)}>
                 <Check className="size-4" /> Approve Product
-              </Button>
+              </Button>}
             </DialogFooter>
           )}
         </DialogContent>

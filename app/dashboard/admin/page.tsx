@@ -22,12 +22,12 @@ import {
   ShoppingBag,
   Users,
   Package,
-  DollarSign,
   Store,
   RefreshCw,
   Wallet,
   AlertCircle,
 } from "lucide-react"
+import { TShIcon } from "@/components/tsh-icon"
 import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, TableSkeleton, PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -268,7 +268,7 @@ export default function AdminOverviewPage() {
         <Card className="opacity-0-init animate-fade-in-up">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Gross Sales</CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
+            <TShIcon className="text-xs text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold animate-count-up">{formatPrice(Number(overview?.money.gross_sales ?? 0))}</div>
@@ -312,7 +312,7 @@ export default function AdminOverviewPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Avg Order Value</CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
+            <TShIcon className="text-xs text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatPrice(Number(overview?.average_order_value ?? 0))}</div>

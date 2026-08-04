@@ -28,12 +28,12 @@ import {
   TrendingUp,
   Package,
   ShoppingBag,
-  DollarSign,
   Users,
   ArrowUpRight,
   Plus,
   Clock,
 } from "lucide-react"
+import { TShIcon } from "@/components/tsh-icon"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Area, AreaChart } from "recharts"
 import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, TableSkeleton } from "@/components/skeletons"
@@ -239,7 +239,7 @@ export default function SellerDashboardPage() {
       value: formatPrice(totalRevenue),
       change: `${newOrders} new orders`,
       trend: "up" as const,
-      icon: DollarSign,
+      icon: TShIcon,
       description: "Gross sales (30d)",
     },
     {
@@ -522,7 +522,7 @@ export default function SellerDashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Commission Paid</CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
+            <TShIcon className="text-xs text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatPrice(Number(overview?.money.commission_revenue ?? 0))}</div>
@@ -532,7 +532,7 @@ export default function SellerDashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Wallet Balance</CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
+            <TShIcon className="text-xs text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatPrice(Number(overview?.available_wallet_balance ?? 0))}</div>

@@ -34,42 +34,42 @@ import {
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 
-type Order = {
+type PaymentTransaction = {
   id: string
-  order_number: string
-  user_id: string
+  transaction_type: string
   status: string
-  total_amount: number
-  currency: string
-  payment_method: string | null
-  payment_status: string | null
+  amount: string | null
+  provider_response: Record<string, unknown> | null
   created_at: string
-  items: { id: string; product_name: string; quantity: number; unit_price: number; total_price: number }[]
+}
+
+type Payment = {
+  id: string
+  order_id: string
+  user_id: string
+  amount: string
+  currency: string
+  method: string
+  provider: string | null
+  status: string
+  provider_transaction_id: string | null
+  paid_at: string | null
+  transactions: PaymentTransaction[]
+  created_at: string
+  updated_at: string | null
 }
 
 const paymentStatusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending: { label: "Pending", variant: "outline" },
-  initiated: { label: "Initiated", variant: "secondary" },
+  processing: { label: "Processing", variant: "secondary" },
   completed: { label: "Completed", variant: "default" },
-  paid: { label: "Paid", variant: "default" },
   failed: { label: "Failed", variant: "destructive" },
   cancelled: { label: "Cancelled", variant: "destructive" },
   refunded: { label: "Refunded", variant: "destructive" },
-  unpaid: { label: "Unpaid", variant: "outline" },
 }
 
-const orderStatusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  pending: { label: "Pending", variant: "outline" },
-  confirmed: { label: "Confirmed", variant: "secondary" },
-  processing: { label: "Processing", variant: "secondary" },
-  shipped: { label: "Shipped", variant: "secondary" },
-  delivered: { label: "Delivered", variant: "default" },
-  cancelled: { label: "Cancelled", variant: "destructive" },
-  refunded: { label: "Refunded", variant: "destructive" },
-}
-
-function formatPrice(price: number): string {
-  return `TSh ${Number(price).toLocaleString()}`
+function formatPrice(price: string, currency: string): string {
+  return `${currency} ${Number(price).toLocaleString()}`
 }
 
 function getApiError(err: unknown): string {
@@ -78,32 +78,52 @@ function getApiError(err: unknown): string {
 }
 
 export default function AdminPaymentsPage() {
-  const [orders, setOrders] = React.useState<Order[]>([])
+  const [payments, setPayments] = React.useState<Payment[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
   const [searchInput, setSearchInput] = React.useState("")
-  const [viewOrder, setViewOrder] = React.useState<Order | null>(null)
+  const [status, setStatus] = React.useState("all")
+  const [viewPayment, setViewPayment] = React.useState<Payment | null>(null)
+  const [detailLoading, setDetailLoading] = React.useState(false)
 
   React.useEffect(() => {
-    api.get<Order[]>("/orders/admin/all")
-      .then(setOrders)
+    const query = status === "all" ? "" : `?payment_status=${status}`
+    api.get<Payment[]>(`/payments/admin/all${query}`)
+      .then(setPayments)
       .catch((err) => {
-        toast.add({ title: "Failed to load orders", description: getApiError(err), type: "error" })
+        toast.add({ title: "Failed to load payments", description: getApiError(err), type: "error" })
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [status])
+
+  const openPayment = async (payment: Payment) => {
+    setViewPayment(payment)
+    setDetailLoading(true)
+    try {
+      setViewPayment(await api.get<Payment>(`/payments/${payment.id}`))
+    } catch (err) {
+      toast.add({ title: "Failed to load payment details", description: getApiError(err), type: "error" })
+    } finally {
+      setDetailLoading(false)
+    }
+  }
 
   const handleSearch = () => {
     setSearch(searchInput)
   }
 
   const filteredPayments = React.useMemo(() => {
-    if (!search) return orders
+    if (!search) return payments
     const term = search.toLowerCase()
-    return orders.filter(
-      (o) => (o.order_number ?? o.id).toLowerCase().includes(term) || o.status.toLowerCase().includes(term)
+    return payments.filter(
+      (payment) =>
+        payment.id.toLowerCase().includes(term) ||
+        payment.order_id.toLowerCase().includes(term) ||
+        payment.user_id.toLowerCase().includes(term) ||
+        payment.provider_transaction_id?.toLowerCase().includes(term) ||
+        payment.provider?.toLowerCase().includes(term)
     )
-  }, [orders, search])
+  }, [payments, search])
 
   if (loading) {
     return (
@@ -117,18 +137,18 @@ export default function AdminPaymentsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Payments</h2>
-        <p className="text-sm text-muted-foreground">View all platform order payments ({orders.length} total).</p>
+        <p className="text-sm text-muted-foreground">View and reconcile payment transactions ({payments.length} total).</p>
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <CreditCard className="size-4" /> All Orders
+              <CreditCard className="size-4" /> All Payments
             </CardTitle>
             <div className="flex gap-2">
               <Input
-                placeholder="Search orders..."
+                placeholder="Search payment, order or provider..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -137,6 +157,20 @@ export default function AdminPaymentsPage() {
               <Button variant="outline" size="sm" onClick={handleSearch}>
                 <Search className="size-4" />
               </Button>
+              <select
+                value={status}
+                onChange={(event) => {
+                  setLoading(true)
+                  setStatus(event.target.value)
+                }}
+                className="h-8 rounded-md border bg-background px-3 text-sm"
+                aria-label="Filter payment status"
+              >
+                <option value="all">All statuses</option>
+                {Object.entries(paymentStatusConfig).map(([value, config]) => (
+                  <option key={value} value={value}>{config.label}</option>
+                ))}
+              </select>
             </div>
           </div>
         </CardHeader>
@@ -144,11 +178,12 @@ export default function AdminPaymentsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order #</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Order</TableHead>
                 <TableHead>Amount</TableHead>
-                <TableHead>Payment Method</TableHead>
-                <TableHead>Payment Status</TableHead>
-                <TableHead>Order Status</TableHead>
+                <TableHead>Method</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -156,27 +191,24 @@ export default function AdminPaymentsPage() {
             <TableBody>
               {filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No orders found.</TableCell>
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">No payment transactions found.</TableCell>
                 </TableRow>
               ) : (
-                filteredPayments.map((o) => (
-                  <TableRow key={o.id}>
-                    <TableCell className="font-mono text-xs">{o.order_number ?? o.id.slice(0, 8)}</TableCell>
-                    <TableCell className="font-medium">{formatPrice(Number(o.total_amount))}</TableCell>
-                    <TableCell>{o.payment_method ?? "—"}</TableCell>
+                filteredPayments.map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell className="font-mono text-xs">{payment.id.slice(0, 8)}</TableCell>
+                    <TableCell className="font-mono text-xs">{payment.order_id.slice(0, 8)}</TableCell>
+                    <TableCell className="font-medium">{formatPrice(payment.amount, payment.currency)}</TableCell>
+                    <TableCell>{payment.method.replaceAll("_", " ")}</TableCell>
+                    <TableCell>{payment.provider ?? "—"}</TableCell>
                     <TableCell>
-                      <Badge variant={paymentStatusConfig[o.payment_status ?? o.status]?.variant ?? "outline"}>
-                        {paymentStatusConfig[o.payment_status ?? o.status]?.label ?? (o.payment_status ?? o.status)}
+                      <Badge variant={paymentStatusConfig[payment.status]?.variant ?? "outline"}>
+                        {paymentStatusConfig[payment.status]?.label ?? payment.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={orderStatusConfig[o.status]?.variant ?? "outline"}>
-                        {orderStatusConfig[o.status]?.label ?? o.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{new Date(o.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{new Date(payment.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon-sm" title="View Details" onClick={() => setViewOrder(o)}>
+                      <Button variant="ghost" size="icon-sm" title="View Details" onClick={() => void openPayment(payment)}>
                         <Eye className="size-4" />
                       </Button>
                     </TableCell>
@@ -188,36 +220,38 @@ export default function AdminPaymentsPage() {
         </CardContent>
       </Card>
 
-      {/* View Order Dialog */}
-      <Dialog open={!!viewOrder} onOpenChange={(open) => !open && setViewOrder(null)}>
+      <Dialog open={!!viewPayment} onOpenChange={(open) => !open && setViewPayment(null)}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
-            <DialogDescription>Order #: {viewOrder?.order_number ?? viewOrder?.id.slice(0, 8)}</DialogDescription>
+            <DialogTitle>Payment Details</DialogTitle>
+            <DialogDescription>Reference: {viewPayment?.id}</DialogDescription>
           </DialogHeader>
-          {viewOrder && (
+          {viewPayment && (
             <div className="flex flex-col gap-4">
+              {detailLoading && <p className="text-sm text-muted-foreground">Refreshing payment details...</p>}
               <div className="grid gap-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Order #:</span> <span className="font-mono text-xs">{viewOrder.order_number ?? viewOrder.id.slice(0, 8)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span> <span className="font-medium">{formatPrice(Number(viewOrder.total_amount))}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Currency:</span> {viewOrder.currency}</div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Payment Method:</span> {viewOrder.payment_method ?? "—"}</div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Payment Status:</span> <Badge variant={paymentStatusConfig[viewOrder.payment_status ?? viewOrder.status]?.variant ?? "outline"}>{viewOrder.payment_status ?? viewOrder.status}</Badge></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Order Status:</span> <Badge variant={orderStatusConfig[viewOrder.status]?.variant ?? "outline"}>{viewOrder.status}</Badge></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Created:</span> {new Date(viewOrder.created_at).toLocaleString()}</div>
+                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Order:</span> <span className="font-mono text-xs">{viewPayment.order_id}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Customer:</span> <span className="font-mono text-xs">{viewPayment.user_id}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span> <span className="font-medium">{formatPrice(viewPayment.amount, viewPayment.currency)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Method:</span> {viewPayment.method.replaceAll("_", " ")}</div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Provider:</span> {viewPayment.provider ?? "—"}</div>
+                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Provider reference:</span> <span className="break-all text-right font-mono text-xs">{viewPayment.provider_transaction_id ?? "—"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Status:</span> <Badge variant={paymentStatusConfig[viewPayment.status]?.variant ?? "outline"}>{viewPayment.status}</Badge></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Paid:</span> {viewPayment.paid_at ? new Date(viewPayment.paid_at).toLocaleString() : "—"}</div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Created:</span> {new Date(viewPayment.created_at).toLocaleString()}</div>
               </div>
 
-              {viewOrder.items && viewOrder.items.length > 0 && (
+              {viewPayment.transactions.length > 0 && (
                 <div>
-                  <h4 className="mb-2 text-sm font-medium">Order Items</h4>
+                  <h4 className="mb-2 text-sm font-medium">Provider Transactions</h4>
                   <div className="flex flex-col gap-1">
-                    {viewOrder.items.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between rounded-md border p-2 text-xs">
+                    {viewPayment.transactions.map((transaction) => (
+                      <div key={transaction.id} className="flex items-center justify-between rounded-md border p-2 text-xs">
                         <div>
-                          <div className="font-medium">{item.product_name}</div>
-                          <div className="text-muted-foreground">Qty: {item.quantity} × {formatPrice(Number(item.unit_price))}</div>
+                          <div className="font-medium">{transaction.transaction_type.replaceAll("_", " ")}</div>
+                          <div className="text-muted-foreground">{new Date(transaction.created_at).toLocaleString()}</div>
                         </div>
-                        <span className="font-medium">{formatPrice(Number(item.total_price))}</span>
+                        <Badge variant={transaction.status === "failed" ? "destructive" : "outline"}>{transaction.status}</Badge>
                       </div>
                     ))}
                   </div>

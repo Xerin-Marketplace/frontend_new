@@ -37,8 +37,10 @@ import {
   Wallet,
   Search,
   Pencil,
+  Plus,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 
 type SellerWallet = {
@@ -91,6 +93,9 @@ function getApiError(err: unknown): string {
 }
 
 export default function AdminWalletsPage() {
+  const { hasPermission, isSuperAdmin } = useAuth()
+  const canManagePayouts = isSuperAdmin || hasPermission("wallet:manage")
+  const canAdjustWallets = isSuperAdmin || hasPermission("wallet:adjust")
   const [tab, setTab] = React.useState<"wallets" | "payouts">("wallets")
   const [wallets, setWallets] = React.useState<SellerWallet[]>([])
   const [payouts, setPayouts] = React.useState<PayoutRequest[]>([])
@@ -102,6 +107,9 @@ export default function AdminWalletsPage() {
   const [adminNote, setAdminNote] = React.useState("")
   const [providerRef, setProviderRef] = React.useState("")
   const [actionLoading, setActionLoading] = React.useState(false)
+  const [adjustWallet, setAdjustWallet] = React.useState<SellerWallet | null>(null)
+  const [adjustmentAmount, setAdjustmentAmount] = React.useState("")
+  const [adjustmentReason, setAdjustmentReason] = React.useState("")
 
   React.useEffect(() => {
     setLoading(true)
@@ -141,6 +149,27 @@ export default function AdminWalletsPage() {
       setPayouts(updated)
     } catch (err) {
       toast.add({ title: "Failed to update payout", description: getApiError(err), type: "error" })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleWalletAdjustment = async () => {
+    if (!adjustWallet || !adjustmentAmount || !adjustmentReason.trim()) return
+    setActionLoading(true)
+    try {
+      await api.post(`/wallet/admin/wallets/${adjustWallet.seller_id}/adjustments`, {
+        amount: Number(adjustmentAmount),
+        reason: adjustmentReason.trim(),
+      })
+      const updated = await api.get<SellerWallet[]>("/wallet/admin/wallets")
+      setWallets(updated)
+      setAdjustWallet(null)
+      setAdjustmentAmount("")
+      setAdjustmentReason("")
+      toast.add({ title: "Wallet adjusted", type: "success" })
+    } catch (err) {
+      toast.add({ title: "Failed to adjust wallet", description: getApiError(err), type: "error" })
     } finally {
       setActionLoading(false)
     }
@@ -213,12 +242,13 @@ export default function AdminWalletsPage() {
                   <TableHead>Reserved</TableHead>
                   <TableHead>Paid Out</TableHead>
                   <TableHead>Frozen</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredWallets.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">No wallets found.</TableCell>
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No wallets found.</TableCell>
                   </TableRow>
                 ) : (
                   filteredWallets.map((w) => (
@@ -232,6 +262,9 @@ export default function AdminWalletsPage() {
                         <Badge variant={w.is_frozen ? "destructive" : "outline"}>
                           {w.is_frozen ? "Frozen" : "Active"}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {canAdjustWallets && <Button variant="ghost" size="sm" onClick={() => setAdjustWallet(w)}><Plus className="size-4" /> Adjust</Button>}
                       </TableCell>
                     </TableRow>
                   ))
@@ -268,9 +301,9 @@ export default function AdminWalletsPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground text-xs">{new Date(p.requested_at).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon-sm" title="Manage" onClick={() => { setEditPayout(p); setNewStatus(p.status); setAdminNote(p.admin_note ?? ""); setProviderRef(p.provider_reference ?? "") }}>
+                        {canManagePayouts && <Button variant="ghost" size="icon-sm" title="Manage" onClick={() => { setEditPayout(p); setNewStatus(p.status); setAdminNote(p.admin_note ?? ""); setProviderRef(p.provider_reference ?? "") }}>
                           <Pencil className="size-4" />
-                        </Button>
+                        </Button>}
                       </TableCell>
                     </TableRow>
                   ))
@@ -316,6 +349,23 @@ export default function AdminWalletsPage() {
             <Button disabled={actionLoading || !newStatus} onClick={handleUpdatePayout}>
               {actionLoading ? "Updating..." : "Update Payout"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!adjustWallet} onOpenChange={(open) => !open && setAdjustWallet(null)}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Adjust Seller Wallet</DialogTitle>
+            <DialogDescription>Use a positive amount to credit or a negative amount to debit seller {adjustWallet?.seller_id}.</DialogDescription>
+          </DialogHeader>
+          <FieldGroup>
+            <Field><FieldLabel htmlFor="adjustmentAmount">Amount</FieldLabel><Input id="adjustmentAmount" type="number" step="0.01" value={adjustmentAmount} onChange={(e) => setAdjustmentAmount(e.target.value)} placeholder="e.g. 5000 or -5000" /></Field>
+            <Field><FieldLabel htmlFor="adjustmentReason">Reason</FieldLabel><Input id="adjustmentReason" value={adjustmentReason} onChange={(e) => setAdjustmentReason(e.target.value)} placeholder="Required audit reason" /></Field>
+          </FieldGroup>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button disabled={actionLoading || !adjustmentAmount || !adjustmentReason.trim()} onClick={handleWalletAdjustment}>{actionLoading ? "Applying..." : "Apply Adjustment"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

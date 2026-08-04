@@ -10,12 +10,12 @@ import {
 } from "@/components/ui/card"
 import {
   ShoppingBag,
-  DollarSign,
   Package,
   ArrowUpRight,
   ArrowDownRight,
   TrendingUp,
 } from "lucide-react"
+import { TShIcon } from "@/components/tsh-icon"
 import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -183,7 +183,7 @@ export default function UserAnalyticsPage() {
       title: "Total Spent",
       value: formatPrice(totalSpent),
       sub: "All time",
-      icon: DollarSign,
+      icon: TShIcon,
       trend: "up" as const,
       color: "text-chart-2",
       bg: "bg-chart-2/10",

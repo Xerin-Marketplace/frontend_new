@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/table"
 import {
   TrendingUp,
-  DollarSign,
   ShoppingCart,
   Package,
   ArrowUpRight,
@@ -27,6 +26,7 @@ import {
   RefreshCw,
   Wallet,
 } from "lucide-react"
+import { TShIcon } from "@/components/tsh-icon"
 import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, TableSkeleton, PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -201,7 +201,7 @@ export default function SellerAnalyticsPage() {
       title: "Avg Order Value",
       value: formatPrice(Math.round(avgOrderValue)),
       sub: "Per order",
-      icon: DollarSign,
+      icon: TShIcon,
       trend: "up" as const,
       color: "text-chart-3",
       bg: "bg-chart-3/10",
@@ -219,7 +219,7 @@ export default function SellerAnalyticsPage() {
 
   const secondaryStats = [
     { title: "Net Earnings", value: formatPrice(netEarnings), icon: TrendingUp, color: "text-green-600" },
-    { title: "Commission Paid", value: formatPrice(commissionPaid), icon: DollarSign, color: "text-muted-foreground" },
+    { title: "Commission Paid", value: formatPrice(commissionPaid), icon: TShIcon, color: "text-muted-foreground" },
     { title: "Refund Rate", value: `${refundRate.toFixed(1)}%`, icon: RefreshCw, color: "text-muted-foreground" },
     { title: "Wallet Available", value: formatPrice(Number(overview?.available_wallet_balance ?? 0)), icon: Wallet, color: "text-muted-foreground" },
   ]

@@ -40,6 +40,7 @@ import {
   TrendingUp,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 
 type Seller = {
   id: string
@@ -95,6 +96,7 @@ type WalletTransaction = {
 
 type PayoutRequest = {
   id: string
+  seller_id: string
   amount: number
   currency: string
   status: string
@@ -132,6 +134,9 @@ function formatPrice(price: number): string {
 }
 
 export default function SellerDetailPage() {
+  const { hasPermission, isSuperAdmin } = useAuth()
+  const canApprove = isSuperAdmin || hasPermission("can_approve_sellers")
+  const canReject = isSuperAdmin || hasPermission("can_reject_sellers")
   const params = useParams()
   const router = useRouter()
   const sellerId = params.id as string
@@ -172,7 +177,7 @@ export default function SellerDetailPage() {
           if (w) setWallet(w)
         }
         if (payoutsRes.status === "fulfilled") {
-          setPayouts(payoutsRes.value.filter((p) => p.id && true).slice(0, 10))
+          setPayouts(payoutsRes.value.filter((p) => p.seller_id === sellerId).slice(0, 10))
         }
       })
       .finally(() => setLoading(false))
@@ -286,14 +291,14 @@ export default function SellerDetailPage() {
                 </div>
               </div>
             </div>
-            {isPending && (
+            {isPending && (canApprove || canReject) && (
               <div className="flex gap-2">
-                <Button variant="destructive" disabled={actionLoading} onClick={handleReject}>
+                {canReject && <Button variant="destructive" disabled={actionLoading} onClick={handleReject}>
                   <X className="size-4" /> Reject
-                </Button>
-                <Button disabled={actionLoading} onClick={handleApprove}>
+                </Button>}
+                {canApprove && <Button disabled={actionLoading} onClick={handleApprove}>
                   <Check className="size-4" /> Approve Seller
-                </Button>
+                </Button>}
               </div>
             )}
           </div>

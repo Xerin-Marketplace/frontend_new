@@ -22,7 +22,6 @@ import {
 import {
   ShoppingBag,
   Heart,
-  DollarSign,
   Package,
   ArrowUpRight,
   Truck,
@@ -30,6 +29,7 @@ import {
   Clock,
   MapPin,
 } from "lucide-react"
+import { TShIcon } from "@/components/tsh-icon"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, type ApiError } from "@/lib/api"
 import { toast } from "@/components/ui/toast"
@@ -125,7 +125,7 @@ export default function UserDashboardPage() {
     { title: "Total Orders", value: loading ? "..." : String(totalOrders), change: "", trend: "up" as const, icon: ShoppingBag, description: "all time" },
     { title: "Pending Deliveries", value: loading ? "..." : String(pendingDeliveries), change: "", trend: "up" as const, icon: Truck, description: "in transit" },
     { title: "Delivered", value: loading ? "..." : String(deliveredCount), change: "", trend: "up" as const, icon: CheckCircle2, description: "completed" },
-    { title: "Total Spent", value: loading ? "..." : formatPrice(totalSpent), change: "", trend: "up" as const, icon: DollarSign, description: "all time" },
+    { title: "Total Spent", value: loading ? "..." : formatPrice(totalSpent), change: "", trend: "up" as const, icon: TShIcon, description: "all time" },
   ]
 
   return (

@@ -36,6 +36,7 @@ import {
   X,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 
 type RefundItem = {
@@ -88,6 +89,9 @@ function getApiError(err: unknown): string {
 }
 
 export default function AdminRefundsPage() {
+  const { hasPermission, isSuperAdmin } = useAuth()
+  const canReview = isSuperAdmin || hasPermission("refunds:review")
+  const canProcess = isSuperAdmin || hasPermission("refunds:process")
   const [refunds, setRefunds] = React.useState<Refund[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
@@ -269,12 +273,12 @@ export default function AdminRefundsPage() {
 
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-2">
-                {viewRefund.status === "requested" && (
+                {canReview && viewRefund.status === "requested" && (
                   <Button variant="outline" size="sm" disabled={actionLoading} onClick={() => handleAction(viewRefund, "review")}>
                     <Eye className="size-4" /> Mark Under Review
                   </Button>
                 )}
-                {(viewRefund.status === "under_review" || viewRefund.status === "requested") && (
+                {canReview && (viewRefund.status === "under_review" || viewRefund.status === "requested") && (
                   <>
                     <Button size="sm" disabled={actionLoading} className="bg-green-600" onClick={() => handleAction(viewRefund, "approve")}>
                       <Check className="size-4" /> Approve
@@ -284,7 +288,7 @@ export default function AdminRefundsPage() {
                     </Button>
                   </>
                 )}
-                {viewRefund.status === "approved" && (
+                {canProcess && viewRefund.status === "approved" && (
                   <Button size="sm" disabled={actionLoading} onClick={() => handleAction(viewRefund, "process")}>
                     <RefreshCw className="size-4" /> Process Refund
                   </Button>

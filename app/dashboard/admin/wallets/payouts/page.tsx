@@ -39,6 +39,7 @@ import {
   Pencil,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 
 type PayoutRequest = {
@@ -76,6 +77,8 @@ function getApiError(err: unknown): string {
 }
 
 export default function AdminPayoutsPage() {
+  const { hasPermission, isSuperAdmin } = useAuth()
+  const canManagePayouts = isSuperAdmin || hasPermission("wallet:manage")
   const [payouts, setPayouts] = React.useState<PayoutRequest[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
@@ -210,9 +213,9 @@ export default function AdminPayoutsPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">{new Date(p.requested_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon-sm" title="Manage" onClick={() => { setEditPayout(p); setNewStatus(p.status); setAdminNote(p.admin_note ?? ""); setProviderRef(p.provider_reference ?? "") }}>
+                      {canManagePayouts && <Button variant="ghost" size="icon-sm" title="Manage" onClick={() => { setEditPayout(p); setNewStatus(p.status); setAdminNote(p.admin_note ?? ""); setProviderRef(p.provider_reference ?? "") }}>
                         <Pencil className="size-4" />
-                      </Button>
+                      </Button>}
                     </TableCell>
                   </TableRow>
                 ))

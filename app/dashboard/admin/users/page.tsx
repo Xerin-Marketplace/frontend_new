@@ -68,6 +68,7 @@ import {
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
 import { cn } from "@/lib/utils"
 
 type AdminUser = {
@@ -173,6 +174,10 @@ function exportToPDF(users: AdminUser[]) {
 
 export default function AdminUsersPage() {
   const router = useRouter()
+  const { hasPermission, isSuperAdmin } = useAuth()
+  const canCreate = isSuperAdmin || hasPermission("can_create_users")
+  const canUpdate = isSuperAdmin || hasPermission("can_update_users")
+  const canDelete = isSuperAdmin || hasPermission("can_delete_users")
   const [users, setUsers] = React.useState<AdminUser[]>([])
   const [total, setTotal] = React.useState(0)
   const [page, setPage] = React.useState(1)
@@ -193,26 +198,18 @@ export default function AdminUsersPage() {
   const fetchUsers = React.useCallback(async () => {
     setLoading(true)
     try {
-      // Fetch all users in batches of 100 (backend max page_size)
-      const allUsers: AdminUser[] = []
-      let currentPage = 1
-      let totalCount = 0
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const data = await api.get<PaginatedUsers>(`/admin/users?page=${currentPage}&page_size=100`)
-        allUsers.push(...data.results)
-        totalCount = data.total
-        if (allUsers.length >= totalCount || data.results.length === 0) break
-        currentPage++
-      }
-      setUsers(allUsers)
-      setTotal(allUsers.length)
+      const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+      if (search) params.set("search", search)
+      if (statusFilter) params.set("status_filter", statusFilter)
+      const data = await api.get<PaginatedUsers>(`/admin/users?${params}`)
+      setUsers(data.results)
+      setTotal(data.total)
     } catch (err) {
       toast.add({ title: "Failed to load users", description: getApiError(err), type: "error" })
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page, search, statusFilter])
 
   React.useEffect(() => { fetchUsers() }, [fetchUsers])
 
@@ -229,20 +226,6 @@ export default function AdminUsersPage() {
   const processedUsers = React.useMemo(() => {
     let result = [...users]
 
-    // Search (client-side)
-    if (search) {
-      const q = search.toLowerCase()
-      result = result.filter((u) =>
-        `${u.first_name ?? ""} ${u.last_name ?? ""}`.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        (u.phone ?? "").toLowerCase().includes(q)
-      )
-    }
-
-    // Status filter
-    if (statusFilter) {
-      result = result.filter((u) => u.status === statusFilter)
-    }
     // Verified filter
     if (verifiedFilter === "verified") {
       result = result.filter((u) => u.is_verified)
@@ -277,7 +260,7 @@ export default function AdminUsersPage() {
     })
 
     return result
-  }, [users, search, sortField, sortDir, statusFilter, verifiedFilter])
+  }, [users, sortField, sortDir, verifiedFilter])
 
   const handleSort = (field: SortField, dir: SortDir) => {
     setSortField(field)
@@ -383,9 +366,10 @@ export default function AdminUsersPage() {
     }
   }
 
-  const filteredTotal = processedUsers.length
-  const totalPages = Math.ceil(filteredTotal / pageSize)
-  const paginatedUsers = processedUsers.slice((page - 1) * pageSize, page * pageSize)
+  const hasLocalFilters = Boolean(verifiedFilter)
+  const filteredTotal = hasLocalFilters ? processedUsers.length : total
+  const totalPages = hasLocalFilters ? 1 : Math.max(1, Math.ceil(total / pageSize))
+  const paginatedUsers = processedUsers
 
   if (loading && users.length === 0) {
     return (
@@ -449,9 +433,9 @@ export default function AdminUsersPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={() => setCreateOpen(true)}>
+          {canCreate && <Button onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" /> Add User
-          </Button>
+          </Button>}
         </div>
       </div>
 
@@ -563,18 +547,18 @@ export default function AdminUsersPage() {
                         <Button variant="ghost" size="icon-sm" title="View Details" onClick={() => router.push(`/dashboard/admin/users/${u.id}`)}>
                           <Eye className="size-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" title={u.is_verified ? "Unverify" : "Verify"} disabled={actionLoading} onClick={() => handleToggleVerify(u)} className={u.is_verified ? "text-green-600" : "text-amber-500"}>
+                        {canUpdate && <Button variant="ghost" size="icon-sm" title={u.is_verified ? "Unverify" : "Verify"} disabled={actionLoading} onClick={() => handleToggleVerify(u)} className={u.is_verified ? "text-green-600" : "text-amber-500"}>
                           {u.is_verified ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" title="Reset Password" disabled={actionLoading} onClick={() => setResetUser(u)}>
+                        </Button>}
+                        {canUpdate && <Button variant="ghost" size="icon-sm" title="Reset Password" disabled={actionLoading} onClick={() => setResetUser(u)}>
                           <KeyRound className="size-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" title="Edit" disabled={actionLoading} onClick={() => setEditUser(u)}>
+                        </Button>}
+                        {canUpdate && <Button variant="ghost" size="icon-sm" title="Edit" disabled={actionLoading} onClick={() => setEditUser(u)}>
                           <Pencil className="size-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" title="Delete" disabled={actionLoading} onClick={() => setDeleteUser(u)} className="text-red-500">
+                        </Button>}
+                        {canDelete && <Button variant="ghost" size="icon-sm" title="Delete" disabled={actionLoading} onClick={() => setDeleteUser(u)} className="text-red-500">
                           <Trash2 className="size-4" />
-                        </Button>
+                        </Button>}
                       </div>
                     </TableCell>
                   </TableRow>

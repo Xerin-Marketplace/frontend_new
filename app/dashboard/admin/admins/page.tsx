@@ -184,6 +184,7 @@ function exportToPDF(admins: AdminUser[]) {
 export default function AdminManagementPage() {
   const { isSuperAdmin } = useAuth()
   const [admins, setAdmins] = React.useState<AdminUser[]>([])
+  const [total, setTotal] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
   const [searchInput, setSearchInput] = React.useState("")
   const [search, setSearch] = React.useState("")
@@ -208,24 +209,18 @@ export default function AdminManagementPage() {
   const loadAdmins = React.useCallback(async () => {
     setLoading(true)
     try {
-      const allUsers: AdminUser[] = []
-      let currentPage = 1
-      let totalCount = 0
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const data = await api.get<PaginatedAdmins>(`/admin/users?page=${currentPage}&page_size=100`)
-        allUsers.push(...data.results)
-        totalCount = data.total
-        if (allUsers.length >= totalCount || data.results.length === 0) break
-        currentPage++
-      }
-      setAdmins(allUsers)
+      const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+      if (search) params.set("search", search)
+      if (statusFilter) params.set("status_filter", statusFilter)
+      const data = await api.get<PaginatedAdmins>(`/admin/users?${params}`)
+      setAdmins(data.results)
+      setTotal(data.total)
     } catch (err) {
       toast.add({ title: "Failed to load admins", description: getApiError(err), type: "error" })
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page, search, statusFilter])
 
   React.useEffect(() => { loadAdmins() }, [loadAdmins])
 
@@ -239,19 +234,6 @@ export default function AdminManagementPage() {
 
   const processedAdmins = React.useMemo(() => {
     let result = [...admins]
-
-    if (search) {
-      const q = search.toLowerCase()
-      result = result.filter((a) =>
-        `${a.first_name ?? ""} ${a.last_name ?? ""}`.toLowerCase().includes(q) ||
-        a.email.toLowerCase().includes(q) ||
-        (a.phone ?? "").toLowerCase().includes(q)
-      )
-    }
-
-    if (statusFilter) {
-      result = result.filter((a) => a.status === statusFilter)
-    }
 
     if (verifiedFilter === "verified") {
       result = result.filter((a) => a.is_verified)
@@ -285,11 +267,12 @@ export default function AdminManagementPage() {
     })
 
     return result
-  }, [admins, search, statusFilter, verifiedFilter, sortField, sortDir])
+  }, [admins, verifiedFilter, sortField, sortDir])
 
-  const filteredTotal = processedAdmins.length
-  const totalPages = Math.ceil(filteredTotal / pageSize)
-  const paginatedAdmins = processedAdmins.slice((page - 1) * pageSize, page * pageSize)
+  const hasLocalFilters = Boolean(verifiedFilter)
+  const filteredTotal = hasLocalFilters ? processedAdmins.length : total
+  const totalPages = hasLocalFilters ? 1 : Math.max(1, Math.ceil(total / pageSize))
+  const paginatedAdmins = processedAdmins
 
   const handleSort = (field: SortField, dir: SortDir) => {
     setSortField(field)

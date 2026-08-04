@@ -58,7 +58,12 @@ type Permission = {
 type RolePermissionsResponse = {
   role_id: string
   role_name: string
-  permission_codes: string[]
+  permissions: string[]
+}
+
+function normalizePermissionCodes(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === "string")
 }
 
 function getApiError(err: unknown): string {
@@ -102,10 +107,13 @@ export default function RolesPermissionsPage() {
 
   React.useEffect(() => {
     if (!selectedRoleId) return
+    setRolePermissions([])
+    setOriginalPermissions([])
     api.get<RolePermissionsResponse>(`/admin/roles/${selectedRoleId}/permissions`)
       .then((res) => {
-        setRolePermissions(res.permission_codes)
-        setOriginalPermissions(res.permission_codes)
+        const permissionCodes = normalizePermissionCodes(res.permissions)
+        setRolePermissions(permissionCodes)
+        setOriginalPermissions(permissionCodes)
       })
       .catch((err) => {
         toast.add({
@@ -123,7 +131,7 @@ export default function RolesPermissionsPage() {
   }
 
   const hasChanges = React.useMemo(() => {
-    const sorted = (arr: string[]) => [...arr].sort().join(",")
+    const sorted = (value: unknown) => normalizePermissionCodes(value).sort().join(",")
     return sorted(rolePermissions) !== sorted(originalPermissions)
   }, [rolePermissions, originalPermissions])
 
@@ -189,6 +197,7 @@ export default function RolesPermissionsPage() {
   }
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId)
+  const canEditSelectedRole = selectedRole?.name !== "super_admin"
 
   return (
     <div className="flex flex-col gap-6">
@@ -249,7 +258,7 @@ export default function RolesPermissionsPage() {
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
-                {hasChanges && (
+                {hasChanges && canEditSelectedRole && (
                   <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                     <DialogTrigger render={
                       <Button className="gap-2">
@@ -296,7 +305,8 @@ export default function RolesPermissionsPage() {
                     <TableCell>
                       <Checkbox
                         checked={rolePermissions.includes(perm.code)}
-                        onCheckedChange={() => togglePermission(perm.code)}
+                        disabled={!canEditSelectedRole}
+                        onCheckedChange={() => canEditSelectedRole && togglePermission(perm.code)}
                       />
                     </TableCell>
                     <TableCell>

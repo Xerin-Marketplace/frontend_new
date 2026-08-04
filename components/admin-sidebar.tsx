@@ -15,8 +15,12 @@ import {
   BarChart3,
   Settings,
   KeyRound,
-  ScrollText,
-  Lock,
+  Tags,
+  BadgePercent,
+  TicketPercent,
+  Truck,
+  Boxes,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react"
 
@@ -84,6 +88,22 @@ const adminData = {
       ],
     },
     {
+      title: "Catalog",
+      url: "/dashboard/admin/catalog/product-categories",
+      icon: Tags,
+      items: [
+        { title: "Product Categories", url: "/dashboard/admin/catalog/product-categories" },
+        { title: "Business Categories", url: "/dashboard/admin/catalog/business-categories" },
+        { title: "Brands", url: "/dashboard/admin/catalog/brands" },
+      ],
+    },
+    {
+      title: "Inventory",
+      url: "/dashboard/admin/inventory",
+      icon: Boxes,
+      items: [{ title: "Inventory Operations", url: "/dashboard/admin/inventory" }],
+    },
+    {
       title: "Orders",
       url: "/dashboard/admin/orders",
       icon: ShoppingBag,
@@ -98,6 +118,24 @@ const adminData = {
       items: [
         { title: "All Payments", url: "/dashboard/admin/payments" },
       ],
+    },
+    {
+      title: "Commissions",
+      url: "/dashboard/admin/commissions",
+      icon: BadgePercent,
+      items: [{ title: "Commission Rules", url: "/dashboard/admin/commissions" }],
+    },
+    {
+      title: "Coupons",
+      url: "/dashboard/admin/coupons",
+      icon: TicketPercent,
+      items: [{ title: "Coupon Management", url: "/dashboard/admin/coupons" }],
+    },
+    {
+      title: "Shipping",
+      url: "/dashboard/admin/shipping",
+      icon: Truck,
+      items: [{ title: "Shipping Operations", url: "/dashboard/admin/shipping" }],
     },
     {
       title: "Wallets",
@@ -154,39 +192,46 @@ const superAdminExtras = {
       ],
     },
     {
-      title: "Audit & Security",
-      url: "/dashboard/admin/audit-logs",
-      icon: ScrollText,
-      items: [
-        { title: "Audit Logs", url: "/dashboard/admin/audit-logs" },
-        { title: "Security Events", url: "/dashboard/admin/security-events" },
-      ],
-    },
-  ],
-  projects: [
-    {
-      name: "Audit Logs",
-      url: "/dashboard/admin/audit-logs",
-      icon: ScrollText,
-    },
-    {
-      name: "Security",
+      title: "Security Events",
       url: "/dashboard/admin/security-events",
-      icon: Lock,
+      icon: ShieldAlert,
+      items: [{ title: "Login & Session Events", url: "/dashboard/admin/security-events" }],
     },
   ],
+  projects: [],
 }
 
 export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { isSuperAdmin } = useAuth()
+  const { isSuperAdmin, hasPermission } = useAuth()
 
   const teams = isSuperAdmin
     ? [{ name: "Xerin Market", logo: ShieldCheck, plan: "Super Admin" }]
     : adminData.teams
 
+  const requiredPermission: Record<string, string | null> = {
+    Dashboard: "analytics:admin_read",
+    Users: "can_view_users",
+    Sellers: "can_view_sellers",
+    Products: "can_view_products",
+    Catalog: "can_view_product_categories",
+    Inventory: "inventory:manage",
+    Orders: "orders:read",
+    Payments: "payments:read",
+    Commissions: "commissions:read",
+    Coupons: "coupons:read",
+    Shipping: "shipping:read",
+    Wallets: "wallet:read",
+    Refunds: "refunds:read",
+    Settings: null,
+  }
+  const visibleAdminNavigation = adminData.navMain.filter((item) => {
+    const permission = requiredPermission[item.title]
+    return permission === null || hasPermission(permission)
+  })
+
   const navMain = isSuperAdmin
     ? [...adminData.navMain, ...superAdminExtras.navMain]
-    : adminData.navMain
+    : visibleAdminNavigation
 
   const projects = isSuperAdmin
     ? [...adminData.projects, ...superAdminExtras.projects]

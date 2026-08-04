@@ -18,9 +18,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   TrendingUp,
-  DollarSign,
   ShoppingBag,
   Store,
   Package,
@@ -40,6 +40,7 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react"
+import { TShIcon } from "@/components/tsh-icon"
 import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, TableSkeleton, PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -231,73 +232,35 @@ export default function AdminAnalyticsPage() {
   const [sales, setSales] = React.useState<AnalyticsSeriesPoint[]>([])
   const [topSellers, setTopSellers] = React.useState<AnalyticsRankingRow[]>([])
   const [topProducts, setTopProducts] = React.useState<AnalyticsRankingRow[]>([])
-  const [summary, setSummary] = React.useState<DashboardSummary | null>(null)
-  const [orderStatus, setOrderStatus] = React.useState<OrderStatusBreakdown>({})
-  const [customers, setCustomers] = React.useState<CustomerStats | null>(null)
-  const [payments, setPayments] = React.useState<PaymentStats | null>(null)
-  const [refunds, setRefunds] = React.useState<RefundStats | null>(null)
-  const [delivery, setDelivery] = React.useState<DeliveryStats | null>(null)
-  const [notifications, setNotifications] = React.useState<NotificationStats | null>(null)
-  const [sellerStats, setSellerStats] = React.useState<SellerStats | null>(null)
-  const [productStats, setProductStats] = React.useState<ProductStats | null>(null)
-  const [searchStats, setSearchStats] = React.useState<SearchStats | null>(null)
-  const [alerts, setAlerts] = React.useState<SystemAlert[]>([])
-  const [activityLogs, setActivityLogs] = React.useState<ActivityLog[]>([])
   const [reconciliation, setReconciliation] = React.useState<Reconciliation | null>(null)
   const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = React.useState(0)
 
   React.useEffect(() => {
     const days = range === "7d" ? 7 : range === "30d" ? 30 : 90
     const end = new Date()
     const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000)
     const params = `?start_at=${start.toISOString()}&end_at=${end.toISOString()}`
-    const periodParam = `?period=custom&start_at=${start.toISOString()}&end_at=${end.toISOString()}`
-
     setLoading(true)
+    setError(null)
     Promise.allSettled([
       api.get<AnalyticsOverview>(`/analytics/admin/overview${params}`),
       api.get<AnalyticsSeriesPoint[]>(`/analytics/admin/sales${params}`),
       api.get<AnalyticsRankingRow[]>(`/analytics/admin/sellers${params}&limit=5`),
       api.get<AnalyticsRankingRow[]>(`/analytics/admin/products${params}&limit=5`),
       api.get<Reconciliation>(`/analytics/admin/reconciliation${params}`),
-      api.get<DashboardSummary>(`/admin/dashboard/summary${periodParam}`),
-      api.get<OrderStatusBreakdown>(`/admin/dashboard/orders${periodParam}`),
-      api.get<CustomerStats>("/admin/dashboard/customers"),
-      api.get<PaymentStats>("/admin/dashboard/payments"),
-      api.get<RefundStats>("/admin/dashboard/refunds"),
-      api.get<DeliveryStats>("/admin/dashboard/delivery"),
-      api.get<NotificationStats>("/admin/dashboard/notifications"),
-      api.get<SellerStats>("/admin/dashboard/sellers"),
-      api.get<ProductStats>("/admin/dashboard/products"),
-      api.get<SearchStats>("/admin/dashboard/search?limit=10"),
-      api.get<SystemAlert[]>("/admin/dashboard/alerts?limit=10"),
-      api.get<ActivityLog[]>("/admin/dashboard/activity-logs?limit=20"),
     ])
-      .then(([
-        oRes, sRes, tsRes, tpRes, recRes, sumRes, osRes,
-        custRes, payRes, refRes, delRes, notifRes, sellRes, prodRes,
-        searchRes, alertRes, logRes,
-      ]) => {
+      .then(([oRes, sRes, tsRes, tpRes, recRes]) => {
         if (oRes.status === "fulfilled") setOverview(oRes.value)
+        else setError("Analytics data is currently unavailable from Xerin-Gateway.")
         if (sRes.status === "fulfilled") setSales(sRes.value)
         if (tsRes.status === "fulfilled") setTopSellers(tsRes.value)
         if (tpRes.status === "fulfilled") setTopProducts(tpRes.value)
         if (recRes.status === "fulfilled") setReconciliation(recRes.value)
-        if (sumRes.status === "fulfilled") setSummary(sumRes.value)
-        if (osRes.status === "fulfilled") setOrderStatus(osRes.value)
-        if (custRes.status === "fulfilled") setCustomers(custRes.value)
-        if (payRes.status === "fulfilled") setPayments(payRes.value)
-        if (refRes.status === "fulfilled") setRefunds(refRes.value)
-        if (delRes.status === "fulfilled") setDelivery(delRes.value)
-        if (notifRes.status === "fulfilled") setNotifications(notifRes.value)
-        if (sellRes.status === "fulfilled") setSellerStats(sellRes.value)
-        if (prodRes.status === "fulfilled") setProductStats(prodRes.value)
-        if (searchRes.status === "fulfilled") setSearchStats(searchRes.value)
-        if (alertRes.status === "fulfilled") setAlerts(alertRes.value)
-        if (logRes.status === "fulfilled") setActivityLogs(logRes.value)
       })
       .finally(() => setLoading(false))
-  }, [range])
+  }, [range, refreshKey])
 
   if (loading) {
     return (
@@ -312,6 +275,22 @@ export default function AdminAnalyticsPage() {
         </div>
         <Card><TableSkeleton rows={5} cols={4} /></Card>
       </PageSkeleton>
+    )
+  }
+
+  if (!overview) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center py-14 text-center">
+          <h2 className="font-semibold">Unable to load analytics</h2>
+          <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+            {error || "The analytics service did not return platform metrics."}
+          </p>
+          <Button className="mt-5" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}>
+            <RefreshCw className="size-4" /> Try again
+          </Button>
+        </CardContent>
+      </Card>
     )
   }
 
@@ -344,11 +323,6 @@ export default function AdminAnalyticsPage() {
     name: p.name.length > 15 ? p.name.slice(0, 12) + "…" : p.name,
     sales: Number(p.gross_sales),
     units: p.units,
-  }))
-
-  const orderStatusData = Object.entries(orderStatus).map(([status, count]) => ({
-    name: status,
-    value: count,
   }))
 
   const rangeLabel = range === "7d" ? "last 7 days" : range === "30d" ? "last 30 days" : "last 90 days"
@@ -384,7 +358,7 @@ export default function AdminAnalyticsPage() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Gross Sales</CardTitle>
             <div className="flex size-8 items-center justify-center rounded-lg bg-chart-1/10">
-              <DollarSign className="size-4 text-chart-1" />
+              <TShIcon className="text-xs text-chart-1" />
             </div>
           </CardHeader>
           <CardContent>
@@ -414,16 +388,16 @@ export default function AdminAnalyticsPage() {
 
         <Card className="opacity-0-init animate-fade-in-up animation-delay-200">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Customers</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Active Sellers</CardTitle>
             <div className="flex size-8 items-center justify-center rounded-lg bg-chart-3/10">
-              <Users className="size-4 text-chart-3" />
+              <Store className="size-4 text-chart-3" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold animate-count-up">{customers?.total ?? summary?.customers ?? 0}</div>
+            <div className="text-2xl font-bold animate-count-up">{overview?.counts.active_sellers ?? 0}</div>
             <div className="mt-1 flex items-center gap-1 text-xs">
               <ArrowUpRight className="size-3 text-green-500" />
-              <span className="text-muted-foreground">{customers?.verified ?? 0} verified</span>
+              <span className="text-muted-foreground">Selling on the platform</span>
             </div>
           </CardContent>
         </Card>
@@ -450,7 +424,7 @@ export default function AdminAnalyticsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Avg Order Value</CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
+            <TShIcon className="text-xs text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">{formatPrice(Number(overview?.average_order_value ?? 0))}</div>
@@ -481,72 +455,6 @@ export default function AdminAnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">{formatPrice(Number(overview?.pending_payout_amount ?? 0))}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ─── Platform Health Stats ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Sellers</CardTitle>
-            <Store className="size-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{sellerStats?.total ?? 0}</div>
-            <p className="text-xs text-muted-foreground">{sellerStats?.approved ?? 0} approved · {sellerStats?.pending ?? 0} pending</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Products</CardTitle>
-            <Package className="size-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{productStats?.total ?? 0}</div>
-            <p className="text-xs text-muted-foreground">{productStats?.approved ?? 0} approved · {productStats?.pending_review ?? 0} pending</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Payments</CardTitle>
-            <CreditCard className="size-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{payments?.total ?? 0}</div>
-            <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">{payments?.successful ?? 0} ok</span> · <span className="text-red-500">{payments?.failed ?? 0} failed</span>
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Deliveries</CardTitle>
-            <Truck className="size-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{delivery?.total ?? 0}</div>
-            <p className="text-xs text-muted-foreground">{delivery?.failed ?? 0} failed</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Notifications</CardTitle>
-            <Bell className="size-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{notifications?.total ?? 0}</div>
-            <p className="text-xs text-muted-foreground">{notifications?.failed ?? 0} failed</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Refunds</CardTitle>
-            <RefreshCw className="size-3.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{refunds?.total ?? 0}</div>
-            <p className="text-xs text-muted-foreground">{refunds?.pending ?? 0} pending</p>
           </CardContent>
         </Card>
       </div>
@@ -674,29 +582,6 @@ export default function AdminAnalyticsPage() {
         </Card>
       </div>
 
-      {/* ─── Order Status Breakdown Donut ────────────────────────────────────── */}
-      {orderStatusData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Order Status Breakdown</CardTitle>
-            <CardDescription>Orders grouped by status — {rangeLabel}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={orderStatusConfig} className="mx-auto h-[300px]">
-              <PieChart>
-                <Pie data={orderStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={3}>
-                  {orderStatusData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
-                  ))}
-                </Pie>
-                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
-                <ChartLegend content={<ChartLegendContent nameKey="name" />} />
-              </PieChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      )}
-
       {/* ─── Top Sellers Horizontal Bar with Custom Labels ──────────────────── */}
       {sellerBarData.length > 0 && (
         <Card>
@@ -760,153 +645,6 @@ export default function AdminAnalyticsPage() {
           </CardFooter>
         </Card>
       )}
-
-      {/* ─── Trending Searches + Most Viewed Products ────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Search className="size-4" /> Trending Searches
-            </CardTitle>
-            <CardDescription>Top search terms on the platform</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {searchStats?.top_searches?.length ? (
-              <div className="flex flex-col gap-2">
-                {searchStats.top_searches.map((s, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <span className="flex size-7 items-center justify-center rounded bg-primary/10 text-xs font-bold text-primary">{i + 1}</span>
-                      <span className="font-medium">{s.term}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Search className="size-3" /> {s.search_count}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Eye className="size-3" /> {s.click_count}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No search data available.</div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Eye className="size-4" /> Most Viewed Products
-            </CardTitle>
-            <CardDescription>Products with the most views</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {searchStats?.most_viewed_products?.length ? (
-              <div className="flex flex-col gap-2">
-                {searchStats.most_viewed_products.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <span className="flex size-7 items-center justify-center rounded bg-primary/10 text-xs font-bold text-primary">{i + 1}</span>
-                      <span className="font-mono text-xs text-muted-foreground">#{p.product_id.slice(0, 8)}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Eye className="size-3" /> {p.views} views
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No view data available.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ─── System Alerts + Admin Activity Feed ─────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="size-4" /> System Alerts
-            </CardTitle>
-            <CardDescription>Recent system alerts and warnings</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {alerts.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {alerts.map((a) => (
-                  <div key={a.id} className="flex items-start gap-3 rounded-lg border p-3">
-                    <div className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded ${
-                      a.severity === "critical" ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300"
-                      : a.severity === "high" ? "bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300"
-                      : "bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-300"
-                    }`}>
-                      <AlertTriangle className="size-3.5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{a.title}</span>
-                        {a.resolved ? (
-                          <Badge className="gap-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                            <CheckCircle className="size-3" /> Resolved
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="gap-1">
-                            <XCircle className="size-3" /> Open
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{a.message}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{new Date(a.created_at).toLocaleString()}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                <CheckCircle className="mr-2 size-5 text-green-500" /> No active alerts.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="size-4" /> Admin Activity Feed
-            </CardTitle>
-            <CardDescription>Recent admin actions and operations</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {activityLogs.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {activityLogs.slice(0, 10).map((log) => (
-                  <div key={log.id} className="flex items-start gap-3 rounded-lg border p-3">
-                    <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded bg-primary/10">
-                      <Activity className="size-3.5 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{log.action.replace(/_/g, " ")}</span>
-                        <span className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {log.resource_type} {log.resource_id && `· #${log.resource_id.slice(0, 8)}`}
-                      </p>
-                      {log.details && <p className="mt-1 text-xs text-muted-foreground">{log.details}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No activity logs.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
       {/* ─── Reconciliation ─────────────────────────────────────────────────── */}
       {reconciliation && (

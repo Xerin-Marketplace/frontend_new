@@ -56,14 +56,14 @@ type PaginatedPayoutAccounts = {
   results: PayoutAccount[]
 }
 
-const MOBILE_MONEY_PROVIDERS: { value: string; label: string; color: string; prefixes: string[] }[] = [
-  { value: "M-Pesa", label: "M-Pesa (Vodacom)", color: "bg-red-500", prefixes: ["74", "75", "76"] },
-  { value: "Airtel Money", label: "Airtel Money", color: "bg-red-600", prefixes: ["68", "69", "78"] },
-  { value: "Tigo Pesa", label: "Tigo Pesa (Halotel)", color: "bg-blue-500", prefixes: ["65", "71", "60"] },
-  { value: "Halopesa", label: "Halopesa", color: "bg-green-500", prefixes: ["62"] },
-  { value: "Azampesa", label: "Azampesa", color: "bg-orange-500", prefixes: ["70"] },
-  { value: "TTCL Pesa", label: "TTCL Pesa", color: "bg-purple-500", prefixes: ["73"] },
-  { value: "EzyPesa", label: "EzyPesa (Zantel)", color: "bg-amber-500", prefixes: ["77"] },
+const MOBILE_MONEY_PROVIDERS: { value: string; label: string; color: string; prefixes: string[]; mno: string }[] = [
+  { value: "M-Pesa", label: "M-Pesa (Vodacom)", color: "bg-red-500", prefixes: ["74", "75", "76"], mno: "MPESA" },
+  { value: "Airtel Money", label: "Airtel Money", color: "bg-red-600", prefixes: ["68", "69", "78"], mno: "AIRTEL" },
+  { value: "Tigo Pesa", label: "Tigo Pesa (Halotel)", color: "bg-blue-500", prefixes: ["65", "71", "60"], mno: "TIGOPESA" },
+  { value: "Halopesa", label: "Halopesa", color: "bg-green-500", prefixes: ["62"], mno: "HALOPESA" },
+  { value: "Azampesa", label: "Azampesa", color: "bg-orange-500", prefixes: ["70"], mno: "AZAMPESA" },
+  { value: "TTCL Pesa", label: "TTCL Pesa", color: "bg-purple-500", prefixes: ["73"], mno: "TTCL" },
+  { value: "EzyPesa", label: "EzyPesa (Zantel)", color: "bg-amber-500", prefixes: ["77"], mno: "EZYPESA" },
 ]
 
 const BANK_PROVIDERS = [
@@ -95,13 +95,13 @@ function validatePhoneNumber(phone: string): boolean {
   return /^(\+?255|0)[67]\d{8}$/.test(cleaned)
 }
 
-function detectMobileProvider(phone: string): { value: string; label: string; color: string } | null {
+function detectMobileProvider(phone: string): { value: string; label: string; color: string; mno: string } | null {
   const cleaned = phone.replace(/[\s-]/g, "").replace(/^(\+?255)/, "0")
   if (cleaned.length < 4 || !cleaned.startsWith("0")) return null
   const prefix = cleaned.substring(1, 3)
   for (const p of MOBILE_MONEY_PROVIDERS) {
     if (p.prefixes.includes(prefix)) {
-      return { value: p.value, label: p.label, color: p.color }
+      return { value: p.value, label: p.label, color: p.color, mno: p.mno }
     }
   }
   return null
@@ -356,18 +356,57 @@ function AccountForm({
   const [accountNumber, setAccountNumber] = React.useState("")
   const [isDefault, setIsDefault] = React.useState(false)
   const [touched, setTouched] = React.useState<Record<string, boolean>>({})
+  const [verifying, setVerifying] = React.useState(false)
+  const [verifiedName, setVerifiedName] = React.useState<string | null>(null)
+  const [lookupError, setLookupError] = React.useState<string | null>(null)
+  const lookupTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const detectedProvider = accountType === "mobile" ? detectMobileProvider(accountNumber) : null
   const phoneValid = accountType === "mobile" ? validatePhoneNumber(accountNumber) : validateBankAccountNumber(accountNumber)
   const providerValid = accountType === "mobile" ? !!detectedProvider : provider.trim().length > 0
   const formValid = providerValid && accountName.trim() && accountNumber.trim() && phoneValid
 
+  // Auto name-lookup via AzamPay API when phone is valid and provider is detected
+  React.useEffect(() => {
+    if (accountType !== "mobile" || !phoneValid || !detectedProvider) {
+      setVerifiedName(null)
+      setLookupError(null)
+      return
+    }
+    if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current)
+    lookupTimeoutRef.current = setTimeout(async () => {
+      setVerifying(true)
+      setLookupError(null)
+      try {
+        const cleaned = accountNumber.replace(/[\s-]/g, "")
+        const res = await api.post<{ success: boolean; account_name: string | null; message: string | null }>("/payments/name-lookup", {
+          account_number: cleaned,
+          provider: detectedProvider.mno,
+        })
+        if (res.success && res.account_name) {
+          setVerifiedName(res.account_name)
+          if (!accountName.trim()) {
+            setAccountName(res.account_name)
+          }
+        } else {
+          setVerifiedName(null)
+        }
+      } catch (err) {
+        setVerifiedName(null)
+        setLookupError(getApiError(err))
+      } finally {
+        setVerifying(false)
+      }
+    }, 800)
+    return () => {
+      if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current)
+    }
+  }, [accountType, accountNumber, phoneValid, detectedProvider])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!formValid) return
-    const cleanedNumber = accountType === "mobile"
-      ? accountNumber.replace(/[\s-]/g, "")
-      : accountNumber.replace(/[\s-]/g, "")
+    const cleanedNumber = accountNumber.replace(/[\s-]/g, "")
     const finalProvider = accountType === "mobile" ? (detectedProvider?.value ?? "") : provider.trim()
     onSubmit({ account_type: accountType, provider: finalProvider, account_name: accountName.trim(), account_number: cleanedNumber, is_default: isDefault })
   }
@@ -439,22 +478,37 @@ function AccountForm({
               <Smartphone className="size-3" />
             </div>
             <span className="font-medium text-green-700">{detectedProvider.label}</span>
-            <CheckCircle2 className="ml-auto size-4 text-green-600" />
+            {verifying ? (
+              <Loader2 className="ml-auto size-4 animate-spin text-green-600" />
+            ) : (
+              <CheckCircle2 className="ml-auto size-4 text-green-600" />
+            )}
           </div>
         )}
 
         {/* Account Holder Name */}
         <Field>
-          <FieldLabel htmlFor="accountName">Account Holder Name</FieldLabel>
+          <FieldLabel htmlFor="accountName">
+            Account Holder Name
+            {verifiedName && (
+              <span className="ml-2 text-xs font-normal text-green-600">✓ Verified via API</span>
+            )}
+          </FieldLabel>
           <Input
             id="accountName"
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, accountName: true }))}
-            placeholder="e.g. Acme Trading Co."
+            placeholder={verifying ? "Verifying account name..." : "e.g. Acme Trading Co."}
             required
-            disabled={actionLoading}
+            disabled={actionLoading || verifying}
           />
+          {verifiedName && verifiedName !== accountName && (
+            <FieldDescription className="text-green-600">
+              <CheckCircle2 className="inline size-3 mr-1" />
+              Verified name: {verifiedName}
+            </FieldDescription>
+          )}
         </Field>
 
         {/* Account Number / Phone */}
@@ -486,6 +540,11 @@ function AccountForm({
           {accountType === "mobile" && touched.accountNumber && accountNumber && phoneValid && !detectedProvider && (
             <FieldDescription className="text-amber-600">
               Unknown provider for this number prefix
+            </FieldDescription>
+          )}
+          {accountType === "mobile" && lookupError && phoneValid && (
+            <FieldDescription className="text-amber-600">
+              Could not verify account: {lookupError}
             </FieldDescription>
           )}
           {accountType === "bank" && touched.accountNumber && accountNumber && !phoneValid && (

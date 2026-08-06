@@ -41,6 +41,11 @@ import {
   RotateCcw,
   Lock,
   Send,
+  Plus,
+  Paperclip,
+  Headphones,
+  Mail,
+  MessageCircle,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton } from "@/components/skeletons"
@@ -96,6 +101,17 @@ const documentTypeLabels: Record<string, string> = {
 
 const documentTypes = ["tin", "business_profile", "business_registration"]
 
+const ADDITIONAL_DOC_CATEGORIES = [
+  { value: "tax_certificate", label: "Tax Clearance Certificate" },
+  { value: "trade_license", label: "Trade License" },
+  { value: "id_copy", label: "National ID / Passport Copy" },
+  { value: "utility_bill", label: "Utility Bill (Proof of Address)" },
+  { value: "bank_statement", label: "Bank Statement" },
+  { value: "partnership_deed", label: "Partnership Deed" },
+  { value: "memorandum", label: "Memorandum & Articles of Association" },
+  { value: "other", label: "Other Document" },
+] as const
+
 function getApiError(err: unknown): string {
   const e = err as ApiError
   return e?.detail || "Something went wrong. Please try again."
@@ -120,6 +136,7 @@ export default function SellerKYCPage() {
   const [documents, setDocuments] = React.useState<KycDocument[]>([])
   const [loading, setLoading] = React.useState(true)
   const [uploadOpen, setUploadOpen] = React.useState(false)
+  const [additionalOpen, setAdditionalOpen] = React.useState(false)
   const [previewDoc, setPreviewDoc] = React.useState<KycDocument | null>(null)
   const [deleteDoc, setDeleteDoc] = React.useState<KycDocument | null>(null)
   const [actionLoading, setActionLoading] = React.useState(false)
@@ -252,7 +269,13 @@ export default function SellerKYCPage() {
 
       {/* Upload Button */}
       {canEdit && (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Dialog open={additionalOpen} onOpenChange={setAdditionalOpen}>
+            <DialogTrigger render={<Button variant="outline"><Plus className="size-4" /> Additional Document</Button>} />
+            <DialogContent className="sm:max-w-[520px]">
+              <AdditionalDocForm onSubmit={handleUpload} actionLoading={actionLoading} existingTypes={documents.map((d) => d.document_type)} />
+            </DialogContent>
+          </Dialog>
           <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
             <DialogTrigger render={<Button><Upload className="size-4" /> Upload Document</Button>} />
             <DialogContent className="sm:max-w-[480px]">
@@ -278,56 +301,58 @@ export default function SellerKYCPage() {
           {documents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FileText className="size-12 text-muted-foreground" />
-              <p className="mt-4 text-sm text-muted-foreground">
-                No documents uploaded yet. Upload your first KYC document to get started.
-              </p>
+              <p className="mt-4 text-sm font-medium">No documents uploaded yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">Upload your required business documents to start the verification process.</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
-              {documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center gap-4 rounded-lg border p-4"
-                >
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                    <FileText className="size-5 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{documentTypeLabels[doc.document_type] ?? doc.document_type}</span>
-                      <Badge variant={docStatusConfig[doc.status]?.variant ?? "secondary"} className="text-xs">
-                        {docStatusConfig[doc.status]?.label ?? doc.status}
-                      </Badge>
+            <div className="space-y-3">
+              {documents.map((doc) => {
+                const isRequired = documentTypes.includes(doc.document_type)
+                return (
+                  <div key={doc.id} className="flex items-center gap-3 rounded-lg border p-3">
+                    <div className={`flex size-9 shrink-0 items-center justify-center rounded-md ${isRequired ? "bg-primary/10" : "bg-muted"}`}>
+                      <FileText className={`size-4 ${isRequired ? "text-primary" : "text-muted-foreground"}`} />
                     </div>
-                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="font-mono">{fileNameFromUrl(doc.document_url)}</span>
-                      <span>{new Date(doc.uploaded_at).toLocaleDateString()}</span>
-                    </div>
-                    {doc.rejection_reason && (
-                      <div className="mt-2 rounded bg-red-50 px-2 py-1 text-xs text-red-700">
-                        <strong>Rejected:</strong> {doc.rejection_reason}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{documentTypeLabels[doc.document_type] ?? doc.document_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+                        <Badge variant={docStatusConfig[doc.status]?.variant ?? "secondary"} className="text-xs">
+                          {docStatusConfig[doc.status]?.label ?? doc.status}
+                        </Badge>
+                        {!isRequired && (
+                          <Badge variant="outline" className="text-xs">Optional</Badge>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon-sm" title="Preview" onClick={() => setPreviewDoc(doc)}>
-                      <Eye className="size-4" />
-                    </Button>
-                    {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        disabled={actionLoading}
-                        onClick={() => setDeleteDoc(doc)}
-                        title="Delete"
-                        className="text-red-500 hover:text-red-600"
-                      >
-                        <Trash2 className="size-4" />
+                      <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="font-mono">{fileNameFromUrl(doc.document_url)}</span>
+                        <span>{new Date(doc.uploaded_at).toLocaleDateString()}</span>
+                      </div>
+                      {doc.rejection_reason && (
+                        <div className="mt-2 rounded bg-red-50 px-2 py-1 text-xs text-red-700">
+                          <strong>Rejected:</strong> {doc.rejection_reason}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon-sm" title="Preview" onClick={() => setPreviewDoc(doc)}>
+                        <Eye className="size-4" />
                       </Button>
-                    )}
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={actionLoading}
+                          onClick={() => setDeleteDoc(doc)}
+                          title="Delete"
+                          className="text-red-500 hover:text-red-600"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>
@@ -398,6 +423,50 @@ export default function SellerKYCPage() {
               <strong>Remaining:</strong> {(kycStatusData?.missing_documents ?? []).map((d) => documentTypeLabels[d] ?? d).join(", ")}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Contact Support */}
+      <Card className="border-primary/20">
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <Headphones className="size-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">Need help with verification?</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Our support team is available to assist you with document uploads and verification questions.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                render={<a href="mailto:support@xerinmarketplace.com?subject=KYC Verification Assistance" />}
+              >
+                <Mail className="size-4" />
+                Email Support
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                render={<a href="https://wa.me/255700000000?text=Hello%2C%20I%20need%20help%20with%20KYC%20verification" target="_blank" rel="noopener noreferrer" />}
+              >
+                <MessageCircle className="size-4" />
+                WhatsApp
+              </Button>
+              <Button
+                size="sm"
+                render={<a href="/dashboard/seller/help" />}
+              >
+                <Headphones className="size-4" />
+                Contact Our Team
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -601,6 +670,191 @@ function UploadForm({
           </label>
           <input
             id="file"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            onChange={handleFileChange}
+            disabled={actionLoading}
+            className="sr-only"
+          />
+          {error && (
+            <FieldDescription className="text-red-500">{error}</FieldDescription>
+          )}
+          {file && !actionLoading && !error && (
+            <FieldDescription>Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</FieldDescription>
+          )}
+        </Field>
+      </FieldGroup>
+      <DialogFooter>
+        <DialogClose render={<Button variant="outline" disabled={actionLoading} />}>Cancel</DialogClose>
+      </DialogFooter>
+    </form>
+  )
+}
+
+function AdditionalDocForm({
+  onSubmit,
+  actionLoading,
+  existingTypes,
+}: {
+  onSubmit: (docType: string, file: File) => void
+  actionLoading: boolean
+  existingTypes: string[]
+}) {
+  const [category, setCategory] = React.useState<string>(ADDITIONAL_DOC_CATEGORIES[0].value)
+  const [customName, setCustomName] = React.useState("")
+  const [file, setFile] = React.useState<File | null>(null)
+  const [progress, setProgress] = React.useState(0)
+  const [error, setError] = React.useState<string | null>(null)
+  const [dragOver, setDragOver] = React.useState(false)
+
+  React.useEffect(() => {
+    if (actionLoading) {
+      setProgress(0)
+      const interval = setInterval(() => {
+        setProgress((p) => {
+          if (p >= 90) return p
+          return p + Math.random() * 15
+        })
+      }, 200)
+      return () => clearInterval(interval)
+    } else {
+      setProgress(100)
+    }
+  }, [actionLoading])
+
+  const validateFile = (f: File): string | null => {
+    const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png"]
+    const ext = f.name.toLowerCase().substring(f.name.lastIndexOf("."))
+    if (!allowedExtensions.includes(ext)) {
+      return "Invalid file type. Only PDF, JPG, and PNG are allowed."
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      return "File too large. Maximum size is 5MB."
+    }
+    return null
+  }
+
+  const docType = category === "other" ? customName.trim().toLowerCase().replace(/\s+/g, "_") : category
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) {
+      const err = validateFile(f)
+      if (err) {
+        setError(err)
+        setFile(null)
+        e.target.value = ""
+        return
+      }
+      setError(null)
+      setFile(f)
+      setProgress(0)
+      if (docType) {
+        onSubmit(docType, f)
+      }
+    }
+  }
+
+  const isExisting = docType && existingTypes.includes(docType)
+  const canSubmit = docType && file && !error
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (canSubmit) onSubmit(docType, file) }}>
+      <DialogHeader>
+        <DialogTitle>Upload Additional Document</DialogTitle>
+        <DialogDescription>
+          Optional documents to support your verification. These are not required but may speed up the review process.
+        </DialogDescription>
+      </DialogHeader>
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="category">Document Category</FieldLabel>
+          <select
+            id="category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            disabled={actionLoading}
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+          >
+            {ADDITIONAL_DOC_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        {category === "other" && (
+          <Field>
+            <FieldLabel htmlFor="customName">Document Name</FieldLabel>
+            <Input
+              id="customName"
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              placeholder="e.g. Insurance Certificate"
+              disabled={actionLoading}
+              required
+            />
+          </Field>
+        )}
+
+        {isExisting && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700">
+            <RotateCcw className="size-3" />
+            A document of this type already exists. Uploading will replace it.
+          </div>
+        )}
+
+        <Field>
+          <FieldLabel htmlFor="addFile">Choose File</FieldLabel>
+          <label
+            htmlFor="addFile"
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragOver(false)
+              const f = e.dataTransfer.files?.[0]
+              if (f) {
+                const err = validateFile(f)
+                if (err) { setError(err); return }
+                setError(null)
+                setFile(f)
+                setProgress(0)
+                if (docType) {
+                  onSubmit(docType, f)
+                }
+              }
+            }}
+            className={`relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 transition-colors cursor-pointer ${
+              dragOver
+                ? "border-primary bg-primary/5"
+                : "border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-muted/5"
+            } ${error ? "border-red-500/50" : ""}`}
+          >
+            {actionLoading ? (
+              <>
+                <Loader2 className="size-8 animate-spin text-primary" />
+                <p className="text-sm font-medium text-foreground">Uploading... {Math.round(progress)}%</p>
+                <div className="mt-2 h-2 w-full max-w-[200px] overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-200 ease-out"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <Paperclip className="size-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-foreground">
+                  {file ? file.name : "Click to browse or drag a file here"}
+                </p>
+                <p className="text-xs text-muted-foreground/70">PDF, JPG, PNG — max 5MB</p>
+              </>
+            )}
+          </label>
+          <input
+            id="addFile"
             type="file"
             accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
             onChange={handleFileChange}

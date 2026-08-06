@@ -56,14 +56,15 @@ type PaginatedPayoutAccounts = {
   results: PayoutAccount[]
 }
 
-const MOBILE_MONEY_PROVIDERS = [
-  { value: "M-Pesa", label: "M-Pesa (Vodacom)", prefix: "07", color: "bg-red-500" },
-  { value: "Airtel Money", label: "Airtel Money", prefix: "068", color: "bg-red-600" },
-  { value: "Tigo Pesa", label: "Tigo Pesa (Halotel)", prefix: "065", color: "bg-blue-500" },
-  { value: "Halopesa", label: "Halopesa", prefix: "062", color: "bg-green-500" },
-  { value: "TTCL Pesa", label: "TTCL Pesa", prefix: "073", color: "bg-purple-500" },
-  { value: "Zantel EzyPesa", label: "EzyPesa (Zantel)", prefix: "077", color: "bg-amber-500" },
-] as const
+const MOBILE_MONEY_PROVIDERS: { value: string; label: string; color: string; prefixes: string[] }[] = [
+  { value: "M-Pesa", label: "M-Pesa (Vodacom)", color: "bg-red-500", prefixes: ["74", "75", "76"] },
+  { value: "Airtel Money", label: "Airtel Money", color: "bg-red-600", prefixes: ["68", "69", "78"] },
+  { value: "Tigo Pesa", label: "Tigo Pesa (Halotel)", color: "bg-blue-500", prefixes: ["65", "71", "60"] },
+  { value: "Halopesa", label: "Halopesa", color: "bg-green-500", prefixes: ["62"] },
+  { value: "Azampesa", label: "Azampesa", color: "bg-orange-500", prefixes: ["70"] },
+  { value: "TTCL Pesa", label: "TTCL Pesa", color: "bg-purple-500", prefixes: ["73"] },
+  { value: "EzyPesa", label: "EzyPesa (Zantel)", color: "bg-amber-500", prefixes: ["77"] },
+]
 
 const BANK_PROVIDERS = [
   "CRDB Bank",
@@ -92,6 +93,23 @@ function maskAccountNumber(num: string): string {
 function validatePhoneNumber(phone: string): boolean {
   const cleaned = phone.replace(/[\s-]/g, "")
   return /^(\+?255|0)[67]\d{8}$/.test(cleaned)
+}
+
+function detectMobileProvider(phone: string): { value: string; label: string; color: string } | null {
+  const cleaned = phone.replace(/[\s-]/g, "").replace(/^(\+?255)/, "0")
+  if (cleaned.length < 4 || !cleaned.startsWith("0")) return null
+  const prefix = cleaned.substring(1, 3)
+  for (const p of MOBILE_MONEY_PROVIDERS) {
+    if (p.prefixes.includes(prefix)) {
+      return { value: p.value, label: p.label, color: p.color }
+    }
+  }
+  return null
+}
+
+function validateBankAccountNumber(num: string): boolean {
+  const cleaned = num.replace(/[\s-]/g, "")
+  return cleaned.length >= 8 && cleaned.length <= 20 && /^\d+$/.test(cleaned)
 }
 
 function getProviderColor(provider: string): string {
@@ -339,16 +357,19 @@ function AccountForm({
   const [isDefault, setIsDefault] = React.useState(false)
   const [touched, setTouched] = React.useState<Record<string, boolean>>({})
 
-  const phoneValid = accountType === "mobile" ? validatePhoneNumber(accountNumber) : accountNumber.trim().length >= 5
-  const formValid = provider.trim() && accountName.trim() && accountNumber.trim() && phoneValid
+  const detectedProvider = accountType === "mobile" ? detectMobileProvider(accountNumber) : null
+  const phoneValid = accountType === "mobile" ? validatePhoneNumber(accountNumber) : validateBankAccountNumber(accountNumber)
+  const providerValid = accountType === "mobile" ? !!detectedProvider : provider.trim().length > 0
+  const formValid = providerValid && accountName.trim() && accountNumber.trim() && phoneValid
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!formValid) return
     const cleanedNumber = accountType === "mobile"
       ? accountNumber.replace(/[\s-]/g, "")
-      : accountNumber.trim()
-    onSubmit({ account_type: accountType, provider: provider.trim(), account_name: accountName.trim(), account_number: cleanedNumber, is_default: isDefault })
+      : accountNumber.replace(/[\s-]/g, "")
+    const finalProvider = accountType === "mobile" ? (detectedProvider?.value ?? "") : provider.trim()
+    onSubmit({ account_type: accountType, provider: finalProvider, account_name: accountName.trim(), account_number: cleanedNumber, is_default: isDefault })
   }
 
   return (
@@ -391,26 +412,10 @@ function AccountForm({
           </div>
         </Field>
 
-        {/* Provider */}
-        <Field>
-          <FieldLabel htmlFor="provider">
-            {accountType === "mobile" ? "Mobile Money Provider" : "Bank Name"}
-          </FieldLabel>
-          {accountType === "mobile" ? (
-            <select
-              id="provider"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-              disabled={actionLoading}
-              required
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-            >
-              <option value="" disabled>Select provider...</option>
-              {MOBILE_MONEY_PROVIDERS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          ) : (
+        {/* Provider — only for bank; mobile auto-detects */}
+        {accountType === "bank" && (
+          <Field>
+            <FieldLabel htmlFor="provider">Bank Name</FieldLabel>
             <select
               id="provider"
               value={provider}
@@ -424,8 +429,19 @@ function AccountForm({
                 <option key={b} value={b}>{b}</option>
               ))}
             </select>
-          )}
-        </Field>
+          </Field>
+        )}
+
+        {/* Auto-detected provider for mobile */}
+        {accountType === "mobile" && detectedProvider && (
+          <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-2 text-sm">
+            <div className={`flex size-6 shrink-0 items-center justify-center rounded ${detectedProvider.color} text-white`}>
+              <Smartphone className="size-3" />
+            </div>
+            <span className="font-medium text-green-700">{detectedProvider.label}</span>
+            <CheckCircle2 className="ml-auto size-4 text-green-600" />
+          </div>
+        )}
 
         {/* Account Holder Name */}
         <Field>
@@ -464,7 +480,23 @@ function AccountForm({
           {accountType === "mobile" && phoneValid && accountNumber && (
             <FieldDescription className="text-green-600">
               <CheckCircle2 className="inline size-3 mr-1" />
-              Valid phone number
+              Valid {detectedProvider?.label ?? "number"}
+            </FieldDescription>
+          )}
+          {accountType === "mobile" && touched.accountNumber && accountNumber && phoneValid && !detectedProvider && (
+            <FieldDescription className="text-amber-600">
+              Unknown provider for this number prefix
+            </FieldDescription>
+          )}
+          {accountType === "bank" && touched.accountNumber && accountNumber && !phoneValid && (
+            <FieldDescription className="text-red-500">
+              Enter a valid account number (8-20 digits)
+            </FieldDescription>
+          )}
+          {accountType === "bank" && phoneValid && accountNumber && (
+            <FieldDescription className="text-green-600">
+              <CheckCircle2 className="inline size-3 mr-1" />
+              Valid account number
             </FieldDescription>
           )}
         </Field>

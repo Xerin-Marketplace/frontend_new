@@ -24,23 +24,20 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { api } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 
 const sellerData = {
   user: {
-    name: "Acme Trading",
-    email: "business@example.com",
+    name: "Loading...",
+    email: "",
     avatar: "/panda.png",
   },
   teams: [
     {
-      name: "Acme Trading Co.",
+      name: "Loading...",
       logo: Store,
-      plan: "Premium Seller",
-    },
-    {
-      name: "Electronics Hub",
-      logo: Package,
-      plan: "Standard",
+      plan: "Seller",
     },
   ],
   navMain: [
@@ -135,16 +132,46 @@ const sellerData = {
 }
 
 export function SellerSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user: authUser } = useAuth()
+  const [sellerInfo, setSellerInfo] = React.useState<{ businessName: string; status: string } | null>(null)
+
+  React.useEffect(() => {
+    api.get<{ business_name: string; status: string }>("/sellers/me")
+      .then((data) => {
+        setSellerInfo({ businessName: data.business_name, status: data.status })
+      })
+      .catch(() => {
+        setSellerInfo({ businessName: "My Store", status: "approved" })
+      })
+  }, [])
+
+  const userName = authUser
+    ? `${authUser.first_name} ${authUser.last_name}`.trim() || authUser.email
+    : "Loading..."
+  const userEmail = authUser?.email ?? ""
+
+  const teams = [{
+    name: sellerInfo?.businessName ?? "Loading...",
+    logo: Store,
+    plan: sellerInfo?.status === "approved" ? "Verified Seller" : sellerInfo?.status === "pending" ? "Pending Review" : "Seller",
+  }]
+
+  const user = {
+    name: userName,
+    email: userEmail,
+    avatar: "/panda.png",
+  }
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={sellerData.teams} />
+        <TeamSwitcher teams={teams} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={sellerData.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={sellerData.user} />
+        <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

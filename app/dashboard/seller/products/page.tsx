@@ -43,6 +43,11 @@ import {
   Package,
   Eye,
   ArrowUpDown,
+  ImagePlus,
+  X,
+  Loader2,
+  Star,
+  Upload,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, TableSkeleton, PageSkeleton } from "@/components/skeletons"
@@ -174,6 +179,7 @@ export default function SellerProductsPage() {
     sale_price: number | null
     category_id: string
     description: string
+    images: File[]
   }) => {
     setActionLoading(true)
     try {
@@ -187,6 +193,23 @@ export default function SellerProductsPage() {
         description: data.description || undefined,
         currency: "TZS",
       })
+
+      if (data.images.length > 0) {
+        const formData = new FormData()
+        data.images.forEach((file) => formData.append("files", file))
+        formData.append("make_first_primary", "true")
+        try {
+          const uploaded = await api.upload<ProductImage[]>(`/products/${newProduct.id}/images/upload`, formData)
+          newProduct.images = uploaded
+        } catch (uploadErr) {
+          toast.add({
+            title: "Images failed to upload",
+            description: getApiError(uploadErr),
+            type: "error",
+          })
+        }
+      }
+
       setProducts((prev) => [newProduct, ...prev])
       setCreateOpen(false)
       toast.add({
@@ -212,6 +235,7 @@ export default function SellerProductsPage() {
     sale_price: number | null
     category_id: string
     description: string
+    images: File[]
   }) => {
     setActionLoading(true)
     try {
@@ -224,6 +248,23 @@ export default function SellerProductsPage() {
         category_id: data.category_id,
         description: data.description || undefined,
       })
+
+      if (data.images.length > 0) {
+        const formData = new FormData()
+        data.images.forEach((file) => formData.append("files", file))
+        formData.append("make_first_primary", "false")
+        try {
+          const uploaded = await api.upload<ProductImage[]>(`/products/${id}/images/upload`, formData)
+          updated.images = [...(updated.images || []), ...uploaded]
+        } catch (uploadErr) {
+          toast.add({
+            title: "Images failed to upload",
+            description: getApiError(uploadErr),
+            type: "error",
+          })
+        }
+      }
+
       setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)))
       setEditProduct(null)
       toast.add({
@@ -536,6 +577,13 @@ export default function SellerProductsPage() {
   )
 }
 
+function generateSku(name: string): string {
+  const words = name.trim().split(/\s+/).slice(0, 3)
+  const prefix = words.map((w) => w.replace(/[^a-zA-Z0-9]/g, "").substring(0, 3).toUpperCase()).join("-")
+  const suffix = Math.random().toString(36).substring(2, 6).toUpperCase()
+  return `${prefix}-${suffix}`
+}
+
 function ProductForm({
   product,
   categories,
@@ -551,15 +599,49 @@ function ProductForm({
     sale_price: number | null
     category_id: string
     description: string
+    images: File[]
   }) => void
   actionLoading?: boolean
 }) {
   const [name, setName] = React.useState(product?.name ?? "")
   const [sku, setSku] = React.useState(product?.sku ?? "")
+  const [skuManual, setSkuManual] = React.useState(!!product?.sku)
   const [price, setPrice] = React.useState(product?.price?.toString() ?? "")
   const [salePrice, setSalePrice] = React.useState(product?.sale_price?.toString() ?? "")
   const [categoryId, setCategoryId] = React.useState(product?.category_id ?? categories[0]?.id ?? "")
   const [description, setDescription] = React.useState(product?.description ?? "")
+  const [images, setImages] = React.useState<File[]>([])
+  const [dragOver, setDragOver] = React.useState(false)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+  React.useEffect(() => {
+    if (!skuManual && name.trim()) {
+      setSku(generateSku(name))
+    }
+  }, [name, skuManual])
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setName(e.target.value)
+    if (skuManual) setSkuManual(false)
+  }
+
+  const handleSkuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSku(e.target.value)
+    setSkuManual(true)
+  }
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return
+    const valid = Array.from(files).filter((f) => {
+      const type = f.type.toLowerCase()
+      return (type === "image/jpeg" || type === "image/png" || type === "image/webp") && f.size <= 5 * 1024 * 1024
+    })
+    setImages((prev) => [...prev, ...valid].slice(0, 10))
+  }
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index))
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -571,6 +653,7 @@ function ProductForm({
       sale_price: salePrice ? parseFloat(salePrice) : null,
       category_id: categoryId,
       description,
+      images,
     })
   }
 
@@ -591,23 +674,31 @@ function ProductForm({
           <Input
             id="name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={handleNameChange}
             placeholder="e.g. Wireless Headphones"
             required
+            disabled={actionLoading}
           />
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
-            <FieldLabel htmlFor="sku">SKU</FieldLabel>
+            <FieldLabel htmlFor="sku">
+              SKU
+              <span className="ml-2 text-xs font-normal text-muted-foreground">Auto-generated</span>
+            </FieldLabel>
             <Input
               id="sku"
               value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              placeholder="e.g. WH-001"
+              onChange={handleSkuChange}
+              placeholder="Auto-generated from name"
               required
               className="font-mono"
+              disabled={actionLoading}
             />
+            {skuManual && (
+              <FieldDescription className="text-amber-600">Manually edited</FieldDescription>
+            )}
           </Field>
           <Field>
             <FieldLabel htmlFor="category">Category</FieldLabel>
@@ -615,8 +706,10 @@ function ProductForm({
               id="category"
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              disabled={actionLoading}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
             >
+              <option value="" disabled>Select category...</option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
@@ -635,6 +728,7 @@ function ProductForm({
               placeholder="85000"
               required
               min="0"
+              disabled={actionLoading}
             />
           </Field>
           <Field>
@@ -646,6 +740,7 @@ function ProductForm({
               onChange={(e) => setSalePrice(e.target.value)}
               placeholder="75000"
               min="0"
+              disabled={actionLoading}
             />
             <FieldDescription>Optional</FieldDescription>
           </Field>
@@ -659,17 +754,82 @@ function ProductForm({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Product description..."
             rows={3}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            disabled={actionLoading}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           />
+        </Field>
+
+        {/* Image Upload */}
+        <Field>
+          <FieldLabel>Product Images</FieldLabel>
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragOver(false)
+              handleFiles(e.dataTransfer.files)
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 transition-colors ${
+              dragOver ? "border-primary bg-primary/5" : "border-input hover:border-primary/50 hover:bg-muted/30"
+            }`}
+          >
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+              <ImagePlus className="size-6 text-muted-foreground" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium">Click to upload or drag and drop</p>
+              <p className="text-xs text-muted-foreground">PNG, JPG, WEBP up to 5MB (max 10 images)</p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFiles(e.target.files)}
+            />
+          </div>
+
+          {images.length > 0 && (
+            <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
+              {images.map((file, index) => (
+                <div key={index} className="group relative aspect-square overflow-hidden rounded-lg border bg-muted">
+                  <img
+                    src={URL.createObjectURL(file)}
+                    alt={`Preview ${index + 1}`}
+                    className="size-full object-cover"
+                  />
+                  {index === 0 && (
+                    <div className="absolute left-1 top-1 flex items-center gap-1 rounded bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
+                      <Star className="size-2.5 fill-current" /> Primary
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); removeImage(index) }}
+                    className="absolute right-1 top-1 flex size-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {images.length > 0 && (
+            <FieldDescription>{images.length} image{images.length > 1 ? "s" : ""} ready — first image will be primary</FieldDescription>
+          )}
         </Field>
       </FieldGroup>
 
       <DialogFooter>
-        <DialogClose render={<Button variant="outline" />}>
+        <DialogClose render={<Button variant="outline" disabled={actionLoading} />}>
           Cancel
         </DialogClose>
         <Button type="submit" disabled={actionLoading}>
-          {actionLoading ? "Saving..." : product ? "Save Changes" : "Create Product"}
+          {actionLoading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          {product ? "Save Changes" : "Create Product"}
         </Button>
       </DialogFooter>
     </form>

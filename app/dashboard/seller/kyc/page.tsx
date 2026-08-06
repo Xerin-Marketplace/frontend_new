@@ -40,7 +40,7 @@ import {
   Loader2,
   RotateCcw,
 } from "lucide-react"
-import { api, type ApiError, API_BASE_URL } from "@/lib/api"
+import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -109,8 +109,7 @@ function resolveFileUrl(rawUrl: string): string {
   const normalized = rawUrl.replace(/\\/g, "/")
   const uploadIdx = normalized.indexOf("uploads/")
   const relPath = uploadIdx >= 0 ? normalized.slice(uploadIdx + 8) : normalized
-  const origin = API_BASE_URL.replace(/\/api\/v\d+\/?$/, "")
-  return `${origin}/uploads/${relPath}`
+  return `/uploads/${relPath}`
 }
 
 export default function SellerKYCPage() {

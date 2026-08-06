@@ -218,6 +218,14 @@ export default function SellerRevenuePage() {
     }
   }
 
+  const filteredTx = React.useMemo(() => {
+    if (txFilter === "all") return transactions
+    return transactions.filter((tx) => {
+      const isCredit = creditTypes.includes(tx.transaction_type)
+      return txFilter === "credit" ? isCredit : !isCredit
+    })
+  }, [transactions, txFilter])
+
   if (loading) {
     return (
       <PageSkeleton>
@@ -301,14 +309,6 @@ export default function SellerRevenuePage() {
     { name: "Refunds", value: refundsCompleted },
     { name: "Payouts", value: payoutsCompleted },
   ].filter((d) => d.value > 0)
-
-  const filteredTx = React.useMemo(() => {
-    if (txFilter === "all") return transactions
-    return transactions.filter((tx) => {
-      const isCredit = creditTypes.includes(tx.transaction_type)
-      return txFilter === "credit" ? isCredit : !isCredit
-    })
-  }, [transactions, txFilter])
 
   const totalTxIn = transactions.filter((t) => creditTypes.includes(t.transaction_type)).reduce((sum, t) => sum + Number(t.amount), 0)
   const totalTxOut = transactions.filter((t) => !creditTypes.includes(t.transaction_type)).reduce((sum, t) => sum + Number(t.amount), 0)

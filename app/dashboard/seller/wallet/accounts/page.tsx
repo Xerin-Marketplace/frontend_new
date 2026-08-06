@@ -451,39 +451,99 @@ function AccountForm({
           </div>
         </Field>
 
-        {/* Provider — only for bank; mobile auto-detects */}
-        {accountType === "bank" && (
+        {/* Account Number / Phone — comes FIRST for mobile so provider is detected before name */}
+        {accountType === "mobile" ? (
           <Field>
-            <FieldLabel htmlFor="provider">Bank Name</FieldLabel>
-            <select
-              id="provider"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-              disabled={actionLoading}
+            <FieldLabel htmlFor="accountNumber">Phone Number</FieldLabel>
+            <Input
+              id="accountNumber"
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value)}
+              onBlur={() => setTouched((t) => ({ ...t, accountNumber: true }))}
+              placeholder="e.g. 0712 345 678"
               required
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-            >
-              <option value="" disabled>Select bank...</option>
-              {BANK_PROVIDERS.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
-          </Field>
-        )}
-
-        {/* Auto-detected provider for mobile */}
-        {accountType === "mobile" && detectedProvider && (
-          <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-2 text-sm">
-            <div className={`flex size-6 shrink-0 items-center justify-center rounded ${detectedProvider.color} text-white`}>
-              <Smartphone className="size-3" />
-            </div>
-            <span className="font-medium text-green-700">{detectedProvider.label}</span>
-            {verifying ? (
-              <Loader2 className="ml-auto size-4 animate-spin text-green-600" />
-            ) : (
-              <CheckCircle2 className="ml-auto size-4 text-green-600" />
+              className="font-mono"
+              disabled={actionLoading}
+            />
+            {touched.accountNumber && accountNumber && !phoneValid && (
+              <FieldDescription className="text-red-500">
+                Enter a valid Tanzanian phone number (e.g. 0712345678 or +255712345678)
+              </FieldDescription>
             )}
-          </div>
+            {phoneValid && accountNumber && detectedProvider && (
+              <div className="mt-2 flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3">
+                <div className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${detectedProvider.color} text-white`}>
+                  <Smartphone className="size-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm text-green-700">{detectedProvider.label}</span>
+                    {verifying ? (
+                      <Loader2 className="size-3.5 animate-spin text-green-600" />
+                    ) : verifiedName ? (
+                      <span className="flex items-center gap-1 text-xs text-green-600">
+                        <CheckCircle2 className="size-3" /> Verified
+                      </span>
+                    ) : null}
+                  </div>
+                  {verifiedName && (
+                    <p className="mt-0.5 text-xs text-green-600/80">Account: {verifiedName}</p>
+                  )}
+                  {lookupError && !verifiedName && (
+                    <p className="mt-0.5 text-xs text-amber-600">Could not verify: {lookupError}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {touched.accountNumber && accountNumber && phoneValid && !detectedProvider && (
+              <FieldDescription className="text-amber-600">
+                Unknown provider for this number prefix
+              </FieldDescription>
+            )}
+          </Field>
+        ) : (
+          <>
+            <Field>
+              <FieldLabel htmlFor="provider">Bank Name</FieldLabel>
+              <select
+                id="provider"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value)}
+                disabled={actionLoading}
+                required
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+              >
+                <option value="" disabled>Select bank...</option>
+                {BANK_PROVIDERS.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="accountNumber">Account Number</FieldLabel>
+              <Input
+                id="accountNumber"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, accountNumber: true }))}
+                placeholder="e.g. 015012345678"
+                required
+                className="font-mono"
+                disabled={actionLoading}
+              />
+              {touched.accountNumber && accountNumber && !phoneValid && (
+                <FieldDescription className="text-red-500">
+                  Enter a valid account number (8-20 digits)
+                </FieldDescription>
+              )}
+              {phoneValid && accountNumber && (
+                <FieldDescription className="text-green-600">
+                  <CheckCircle2 className="inline size-3 mr-1" />
+                  Valid account number
+                </FieldDescription>
+              )}
+            </Field>
+          </>
         )}
 
         {/* Account Holder Name */}
@@ -503,61 +563,6 @@ function AccountForm({
             required
             disabled={actionLoading || verifying}
           />
-          {verifiedName && verifiedName !== accountName && (
-            <FieldDescription className="text-green-600">
-              <CheckCircle2 className="inline size-3 mr-1" />
-              Verified name: {verifiedName}
-            </FieldDescription>
-          )}
-        </Field>
-
-        {/* Account Number / Phone */}
-        <Field>
-          <FieldLabel htmlFor="accountNumber">
-            {accountType === "mobile" ? "Phone Number" : "Account Number"}
-          </FieldLabel>
-          <Input
-            id="accountNumber"
-            value={accountNumber}
-            onChange={(e) => setAccountNumber(e.target.value)}
-            onBlur={() => setTouched((t) => ({ ...t, accountNumber: true }))}
-            placeholder={accountType === "mobile" ? "e.g. 0712 345 678" : "e.g. 0150-1234-5678"}
-            required
-            className="font-mono"
-            disabled={actionLoading}
-          />
-          {accountType === "mobile" && touched.accountNumber && accountNumber && !phoneValid && (
-            <FieldDescription className="text-red-500">
-              Enter a valid Tanzanian phone number (e.g. 0712345678 or +255712345678)
-            </FieldDescription>
-          )}
-          {accountType === "mobile" && phoneValid && accountNumber && (
-            <FieldDescription className="text-green-600">
-              <CheckCircle2 className="inline size-3 mr-1" />
-              Valid {detectedProvider?.label ?? "number"}
-            </FieldDescription>
-          )}
-          {accountType === "mobile" && touched.accountNumber && accountNumber && phoneValid && !detectedProvider && (
-            <FieldDescription className="text-amber-600">
-              Unknown provider for this number prefix
-            </FieldDescription>
-          )}
-          {accountType === "mobile" && lookupError && phoneValid && (
-            <FieldDescription className="text-amber-600">
-              Could not verify account: {lookupError}
-            </FieldDescription>
-          )}
-          {accountType === "bank" && touched.accountNumber && accountNumber && !phoneValid && (
-            <FieldDescription className="text-red-500">
-              Enter a valid account number (8-20 digits)
-            </FieldDescription>
-          )}
-          {accountType === "bank" && phoneValid && accountNumber && (
-            <FieldDescription className="text-green-600">
-              <CheckCircle2 className="inline size-3 mr-1" />
-              Valid account number
-            </FieldDescription>
-          )}
         </Field>
 
         {/* Default Checkbox */}

@@ -34,6 +34,7 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  Trash2,
   AlertCircle,
   Eye,
   Loader2,
@@ -118,6 +119,7 @@ export default function SellerKYCPage() {
   const [loading, setLoading] = React.useState(true)
   const [uploadOpen, setUploadOpen] = React.useState(false)
   const [previewDoc, setPreviewDoc] = React.useState<KycDocument | null>(null)
+  const [deleteDoc, setDeleteDoc] = React.useState<KycDocument | null>(null)
   const [actionLoading, setActionLoading] = React.useState(false)
 
   React.useEffect(() => {
@@ -162,6 +164,29 @@ export default function SellerKYCPage() {
     } catch (err) {
       toast.add({
         title: "Failed to upload",
+        description: getApiError(err),
+        type: "error",
+      })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    const doc = documents.find((d) => d.id === id)
+    setActionLoading(true)
+    try {
+      await api.delete(`/sellers/kyc-documents/${id}`)
+      setDocuments((prev) => prev.filter((d) => d.id !== id))
+      setDeleteDoc(null)
+      toast.add({
+        title: "Document deleted!",
+        description: `${documentTypeLabels[doc?.document_type ?? ""] ?? doc?.document_type ?? "Document"} has been removed.`,
+        type: "success",
+      })
+    } catch (err) {
+      toast.add({
+        title: "Failed to delete",
         description: getApiError(err),
         type: "error",
       })
@@ -273,6 +298,16 @@ export default function SellerKYCPage() {
                     <Button variant="ghost" size="icon-sm" title="Preview" onClick={() => setPreviewDoc(doc)}>
                       <Eye className="size-4" />
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={actionLoading}
+                      onClick={() => setDeleteDoc(doc)}
+                      title="Delete"
+                      className="text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -297,6 +332,25 @@ export default function SellerKYCPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation */}
+      <Dialog open={!!deleteDoc} onOpenChange={(open) => !open && setDeleteDoc(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Delete Document?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{deleteDoc ? documentTypeLabels[deleteDoc.document_type] ?? deleteDoc.document_type : ""}</strong>? You can re-upload it later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" disabled={actionLoading} />}>Cancel</DialogClose>
+            <Button variant="destructive" disabled={actionLoading} onClick={() => deleteDoc && handleDelete(deleteDoc.id)}>
+              {actionLoading ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Document Preview */}
       <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>

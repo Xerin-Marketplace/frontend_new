@@ -42,7 +42,7 @@ import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 
-type KycStatus = "not_submitted" | "pending_review" | "approved" | "rejected"
+type KycStatus = "pending" | "under_review" | "approved" | "rejected" | "suspended" | "not_submitted"
 
 type KycDocument = {
   id: string
@@ -62,11 +62,20 @@ type KycStatusResponse = {
   can_submit_for_review: boolean
 }
 
-const statusConfig: Record<KycStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode; desc: string }> = {
-  not_submitted: { label: "Not Submitted", variant: "outline", icon: <AlertCircle className="size-4" />, desc: "Upload your business documents to start selling." },
-  pending_review: { label: "Pending Review", variant: "secondary", icon: <Clock className="size-4" />, desc: "Your documents are under review. This usually takes 1-2 business days." },
+type PaginatedKycDocuments = {
+  total: number
+  page: number
+  page_size: number
+  results: KycDocument[]
+}
+
+const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode; desc: string }> = {
+  pending: { label: "Pending", variant: "outline", icon: <AlertCircle className="size-4" />, desc: "Upload your business documents to start selling." },
+  under_review: { label: "Under Review", variant: "secondary", icon: <Clock className="size-4" />, desc: "Your documents are under review. This usually takes 1-2 business days." },
   approved: { label: "Approved", variant: "default", icon: <CheckCircle2 className="size-4" />, desc: "Your KYC is verified. You can sell on the marketplace." },
   rejected: { label: "Rejected", variant: "destructive", icon: <XCircle className="size-4" />, desc: "Some documents were rejected. Please re-upload corrected versions." },
+  suspended: { label: "Suspended", variant: "destructive", icon: <XCircle className="size-4" />, desc: "Your seller account has been suspended. Contact support for assistance." },
+  not_submitted: { label: "Not Submitted", variant: "outline", icon: <AlertCircle className="size-4" />, desc: "Upload your business documents to start selling." },
 }
 
 const docStatusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" }> = {
@@ -75,15 +84,13 @@ const docStatusConfig: Record<string, { label: string; variant: "default" | "sec
   rejected: { label: "Rejected", variant: "destructive" },
 }
 
-const documentTypes = [
-  "Business Registration Certificate",
-  "TIN Certificate",
-  "VAT Certificate",
-  "Trade License",
-  "ID / Passport Copy",
-  "Bank Statement",
-  "Utility Bill",
-]
+const documentTypeLabels: Record<string, string> = {
+  tin: "TIN Certificate",
+  business_profile: "Business Profile",
+  business_registration: "Business Registration Certificate",
+}
+
+const documentTypes = ["tin", "business_profile", "business_registration"]
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -105,22 +112,19 @@ export default function SellerKYCPage() {
   const [actionLoading, setActionLoading] = React.useState(false)
 
   React.useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.get<KycStatusResponse>("/sellers/kyc-status"),
-      api.get<KycDocument[]>("/sellers/kyc-documents"),
+      api.get<PaginatedKycDocuments>("/sellers/kyc-documents?page=1&page_size=100"),
     ])
-      .then(([statusRes, docs]) => {
-        setKycStatusData(statusRes)
-        const status = statusRes.seller_status as KycStatus
-        setKycStatus(status)
-        setDocuments(docs)
-      })
-      .catch((err) => {
-        toast.add({
-          title: "Failed to load KYC data",
-          description: getApiError(err),
-          type: "error",
-        })
+      .then(([statusRes, docsRes]) => {
+        if (statusRes.status === "fulfilled") {
+          setKycStatusData(statusRes.value)
+          setKycStatus(statusRes.value.seller_status as KycStatus)
+        }
+        if (docsRes.status === "fulfilled") {
+          const val = docsRes.value
+          setDocuments(Array.isArray(val?.results) ? val.results : Array.isArray(val) ? val : [])
+        }
       })
       .finally(() => setLoading(false))
   }, [])
@@ -136,7 +140,7 @@ export default function SellerKYCPage() {
       setUploadOpen(false)
       toast.add({
         title: "Document uploaded!",
-        description: `${docType} has been submitted for review.`,
+        description: `${documentTypeLabels[docType] ?? docType} has been submitted for review.`,
         type: "success",
       })
     } catch (err) {
@@ -159,7 +163,7 @@ export default function SellerKYCPage() {
       setDeleteDoc(null)
       toast.add({
         title: "Document deleted!",
-        description: `${fileNameFromUrl(doc?.document_url ?? "")} has been removed.`,
+        description: `${documentTypeLabels[doc?.document_type ?? ""] ?? doc?.document_type ?? fileNameFromUrl(doc?.document_url ?? "")} has been removed.`,
         type: "success",
       })
     } catch (err) {
@@ -183,7 +187,7 @@ export default function SellerKYCPage() {
     )
   }
 
-  const cfg = statusConfig[kycStatus]
+  const cfg = statusConfig[kycStatus] ?? statusConfig.not_submitted
 
   return (
     <div className="flex flex-col gap-6">
@@ -201,7 +205,7 @@ export default function SellerKYCPage() {
             <div className={`flex size-12 shrink-0 items-center justify-center rounded-full ${
               kycStatus === "approved" ? "bg-green-100 text-green-600" :
               kycStatus === "rejected" ? "bg-red-100 text-red-600" :
-              kycStatus === "pending_review" ? "bg-blue-100 text-blue-600" :
+              kycStatus === "under_review" ? "bg-blue-100 text-blue-600" :
               "bg-muted text-muted-foreground"
             }`}>
               {cfg.icon}
@@ -257,7 +261,7 @@ export default function SellerKYCPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{doc.document_type}</span>
+                      <span className="font-medium text-sm">{documentTypeLabels[doc.document_type] ?? doc.document_type}</span>
                       <Badge variant={docStatusConfig[doc.status]?.variant ?? "secondary"} className="text-xs">
                         {docStatusConfig[doc.status]?.label ?? doc.status}
                       </Badge>
@@ -304,7 +308,7 @@ export default function SellerKYCPage() {
             {(kycStatusData?.required_documents ?? documentTypes).map((doc) => (
               <div key={doc} className="flex items-center gap-2 text-sm">
                 <FileCheck className="size-4 text-muted-foreground" />
-                {doc}
+                {documentTypeLabels[doc] ?? doc}
               </div>
             ))}
           </div>
@@ -370,7 +374,7 @@ function UploadForm({
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {documentTypes.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>{documentTypeLabels[t] ?? t}</option>
             ))}
           </select>
         </Field>

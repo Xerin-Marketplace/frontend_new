@@ -42,9 +42,16 @@ import {
   Area,
   BarChart,
   Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
   CartesianGrid,
   XAxis,
   YAxis,
+  Legend,
+  ResponsiveContainer,
 } from "recharts"
 
 type AnalyticsMoneySummary = {
@@ -107,11 +114,18 @@ function getApiError(err: unknown): string {
 const salesChartConfig = {
   amount: { label: "Revenue", color: "hsl(var(--chart-1))" },
   orders: { label: "Orders", color: "hsl(var(--chart-2))" },
+  earnings: { label: "Net Earnings", color: "hsl(var(--chart-3))" },
 } satisfies ChartConfig
 
 const unitsChartConfig = {
   units: { label: "Units Sold", color: "hsl(var(--chart-3))" },
 } satisfies ChartConfig
+
+const breakdownConfig = {
+  value: { label: "Amount", color: "hsl(var(--chart-4))" },
+} satisfies ChartConfig
+
+const PIE_COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"]
 
 export default function SellerAnalyticsPage() {
   const [range, setRange] = React.useState<"7d" | "30d" | "90d">("7d")
@@ -159,6 +173,12 @@ export default function SellerAnalyticsPage() {
   const commissionPaid = Number(overview?.money.commission_revenue ?? 0)
   const refundRate = Number(overview?.refund_rate_percent ?? 0)
   const refundedOrders = overview?.counts.refunded_orders ?? 0
+  const refundsCompleted = Number(overview?.money.refunds_completed ?? 0)
+  const payoutsCompleted = Number(overview?.money.payouts_completed ?? 0)
+  const paidOrders = overview?.counts.paid_orders ?? 0
+  const conversionRate = totalOrders > 0 ? (paidOrders / totalOrders) * 100 : 0
+  const commissionRate = totalRevenue > 0 ? (commissionPaid / totalRevenue) * 100 : 0
+  const netMargin = totalRevenue > 0 ? (netEarnings / totalRevenue) * 100 : 0
 
   const chartData = sales.map((s) => ({
     period: s.period,
@@ -171,7 +191,15 @@ export default function SellerAnalyticsPage() {
     name: p.name.length > 15 ? p.name.slice(0, 15) + "…" : p.name,
     sales: Number(p.gross_sales),
     units: p.units,
+    net: Number(p.net_earnings),
   }))
+
+  const breakdownData = [
+    { name: "Net Earnings", value: netEarnings },
+    { name: "Commission", value: commissionPaid },
+    { name: "Refunds", value: refundsCompleted },
+    { name: "Payouts", value: payoutsCompleted },
+  ].filter((d) => d.value > 0)
 
   const stats = [
     {
@@ -213,10 +241,10 @@ export default function SellerAnalyticsPage() {
   ]
 
   const secondaryStats = [
-    { title: "Net Earnings", value: formatPrice(netEarnings), icon: TrendingUp, color: "text-green-600" },
-    { title: "Commission Paid", value: formatPrice(commissionPaid), icon: TShIcon, color: "text-muted-foreground" },
-    { title: "Refund Rate", value: `${refundRate.toFixed(1)}%`, icon: RefreshCw, color: "text-muted-foreground" },
-    { title: "Wallet Available", value: formatPrice(Number(overview?.available_wallet_balance ?? 0)), icon: Wallet, color: "text-muted-foreground" },
+    { title: "Net Earnings", value: formatPrice(netEarnings), icon: TrendingUp, color: "text-green-600", sub: `${netMargin.toFixed(1)}% margin` },
+    { title: "Commission Paid", value: formatPrice(commissionPaid), icon: TShIcon, color: "text-muted-foreground", sub: `${commissionRate.toFixed(1)}% rate` },
+    { title: "Refund Rate", value: `${refundRate.toFixed(1)}%`, icon: RefreshCw, color: "text-muted-foreground", sub: `${refundedOrders} refunded orders` },
+    { title: "Conversion Rate", value: `${conversionRate.toFixed(1)}%`, icon: ShoppingCart, color: "text-blue-600", sub: `${paidOrders} of ${totalOrders} orders` },
   ]
 
   return (
@@ -289,6 +317,7 @@ export default function SellerAnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xl font-bold">{stat.value}</div>
+              {stat.sub && <p className="mt-1 text-xs text-muted-foreground">{stat.sub}</p>}
             </CardContent>
           </Card>
         ))}
@@ -400,11 +429,97 @@ export default function SellerAnalyticsPage() {
         </Card>
       </div>
 
+      {/* Orders Trend Line Chart + Revenue Breakdown Donut */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="lg:col-span-4 opacity-0-init animate-fade-in-up animation-delay-500">
+          <CardHeader>
+            <CardTitle>Orders Trend</CardTitle>
+            <CardDescription>Daily order count over time</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {chartData.length === 0 ? (
+              <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
+                No orders data for this period.
+              </div>
+            ) : (
+              <ChartContainer config={salesChartConfig} className="h-[250px] w-full">
+                <LineChart data={chartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="period"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    minTickGap={24}
+                    fontSize={11}
+                  />
+                  <YAxis tickLine={false} axisLine={false} allowDecimals={false} fontSize={11} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line
+                    type="monotone"
+                    dataKey="orders"
+                    stroke="var(--color-orders)"
+                    strokeWidth={2}
+                    dot={false}
+                    name="Orders"
+                  />
+                </LineChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-3 opacity-0-init animate-fade-in-up animation-delay-700">
+          <CardHeader>
+            <CardTitle>Revenue Breakdown</CardTitle>
+            <CardDescription>Where your revenue goes</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {breakdownData.length === 0 ? (
+              <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
+                No breakdown data available.
+              </div>
+            ) : (
+              <>
+                <ChartContainer config={breakdownConfig} className="h-[200px] w-full">
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent nameKey="value" />} />
+                    <Pie
+                      data={breakdownData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={75}
+                      innerRadius={45}
+                      paddingAngle={3}
+                    >
+                      {breakdownData.map((_, idx) => (
+                        <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+                <div className="mt-3 flex flex-wrap justify-center gap-3">
+                  {breakdownData.map((d, idx) => (
+                    <div key={d.name} className="flex items-center gap-1.5 text-xs">
+                      <div className="size-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} />
+                      <span className="text-muted-foreground">{d.name}</span>
+                      <span className="font-medium">{formatPrice(d.value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Top Products Bar Chart */}
       {productBarData.length > 0 && (
         <Card className="opacity-0-init animate-fade-in-up animation-delay-500">
           <CardHeader>
-            <CardTitle>Top Products by Revenue</CardTitle>
+            <CardTitle>Top Products by Revenue & Net Earnings</CardTitle>
             <CardDescription>Best performing products this period</CardDescription>
           </CardHeader>
           <CardContent>
@@ -415,6 +530,7 @@ export default function SellerAnalyticsPage() {
                 <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} fontSize={11} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar dataKey="sales" fill="var(--color-amount)" radius={[4, 4, 0, 0]} name="Gross Sales" />
+                <Bar dataKey="net" fill="var(--color-earnings)" radius={[4, 4, 0, 0]} name="Net Earnings" />
               </BarChart>
             </ChartContainer>
           </CardContent>

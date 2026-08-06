@@ -423,7 +423,7 @@ export default function BecomeSellerPage() {
                   <Input
                     id="business-name"
                     type="text"
-                    placeholder="Acme Trading Co."
+                    placeholder="e.g. Xerin Marketplace"
                     className={cn("pl-9", errors.business_name && "border-red-500")}
                     value={businessName}
                     onChange={(e) => {
@@ -433,6 +433,7 @@ export default function BecomeSellerPage() {
                     required
                   />
                 </div>
+                <FieldDescription>Enter your official business or shop name as customers will see it.</FieldDescription>
                 {errors.business_name && <FieldDescription className="text-red-500">{errors.business_name}</FieldDescription>}
               </Field>
 

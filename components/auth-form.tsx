@@ -688,7 +688,7 @@ function AuthFormInner({
                   <Input
                     id="seller-name"
                     type="text"
-                    placeholder="Acme Trading Co."
+                    placeholder="e.g. Xerin Marketplace"
                     className={cn("pl-9", fieldErrorClass(sellerErrors.business_name))}
                     value={sellerBusinessName}
                     onChange={(e) => {

@@ -34,7 +34,6 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  Trash2,
   AlertCircle,
   Eye,
   Loader2,
@@ -118,7 +117,6 @@ export default function SellerKYCPage() {
   const [documents, setDocuments] = React.useState<KycDocument[]>([])
   const [loading, setLoading] = React.useState(true)
   const [uploadOpen, setUploadOpen] = React.useState(false)
-  const [deleteDoc, setDeleteDoc] = React.useState<KycDocument | null>(null)
   const [previewDoc, setPreviewDoc] = React.useState<KycDocument | null>(null)
   const [actionLoading, setActionLoading] = React.useState(false)
 
@@ -164,29 +162,6 @@ export default function SellerKYCPage() {
     } catch (err) {
       toast.add({
         title: "Failed to upload",
-        description: getApiError(err),
-        type: "error",
-      })
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleDelete = async (id: string) => {
-    const doc = documents.find((d) => d.id === id)
-    setActionLoading(true)
-    try {
-      await api.delete(`/sellers/kyc-documents/${id}`)
-      setDocuments((prev) => prev.filter((d) => d.id !== id))
-      setDeleteDoc(null)
-      toast.add({
-        title: "Document deleted!",
-        description: `${documentTypeLabels[doc?.document_type ?? ""] ?? doc?.document_type ?? fileNameFromUrl(doc?.document_url ?? "")} has been removed.`,
-        type: "success",
-      })
-    } catch (err) {
-      toast.add({
-        title: "Failed to delete",
         description: getApiError(err),
         type: "error",
       })
@@ -298,16 +273,6 @@ export default function SellerKYCPage() {
                     <Button variant="ghost" size="icon-sm" title="Preview" onClick={() => setPreviewDoc(doc)}>
                       <Eye className="size-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      disabled={actionLoading}
-                      onClick={() => setDeleteDoc(doc)}
-                      title="Delete"
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
                   </div>
                 </div>
               ))}
@@ -332,25 +297,6 @@ export default function SellerKYCPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Delete Confirmation */}
-      <Dialog open={!!deleteDoc} onOpenChange={(open) => !open && setDeleteDoc(null)}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Delete Document?</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete <strong>{deleteDoc ? documentTypeLabels[deleteDoc.document_type] ?? deleteDoc.document_type : ""}</strong>? You can re-upload it later.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button variant="destructive" disabled={actionLoading} onClick={() => deleteDoc && handleDelete(deleteDoc.id)}>
-              <Trash2 className="size-4" />
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Document Preview */}
       <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
@@ -395,6 +341,22 @@ function UploadForm({
 }) {
   const [docType, setDocType] = React.useState(documentTypes[0])
   const [file, setFile] = React.useState<File | null>(null)
+  const [progress, setProgress] = React.useState(0)
+
+  React.useEffect(() => {
+    if (actionLoading) {
+      setProgress(0)
+      const interval = setInterval(() => {
+        setProgress((p) => {
+          if (p >= 90) return p
+          return p + Math.random() * 15
+        })
+      }, 200)
+      return () => clearInterval(interval)
+    } else {
+      setProgress(100)
+    }
+  }, [actionLoading])
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
@@ -406,6 +368,7 @@ function UploadForm({
     const f = e.target.files?.[0]
     if (f) {
       setFile(f)
+      setProgress(0)
       onSubmit(docType, f)
     }
   }
@@ -427,7 +390,8 @@ function UploadForm({
             id="docType"
             value={docType}
             onChange={(e) => setDocType(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+            disabled={actionLoading}
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
             {documentTypes.map((t) => (
               <option key={t} value={t}>
@@ -444,17 +408,25 @@ function UploadForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="file">Choose File</FieldLabel>
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-6 transition-colors hover:border-muted-foreground/50">
+          <div className="relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 transition-colors hover:border-muted-foreground/50">
             {actionLoading ? (
               <>
-                <Loader2 className="size-8 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Uploading...</p>
+                <Loader2 className="size-8 animate-spin text-primary" />
+                <p className="text-sm font-medium text-foreground">Uploading... {Math.round(progress)}%</p>
+                <div className="mt-2 h-2 w-full max-w-[200px] overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-200 ease-out"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
               </>
             ) : (
               <>
-                <Upload className="size-8 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Click to select a file
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <Upload className="size-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-foreground">
+                  Click to browse your computer
                 </p>
                 <p className="text-xs text-muted-foreground/70">PDF, JPG, PNG — max 5MB</p>
               </>
@@ -475,7 +447,7 @@ function UploadForm({
         </Field>
       </FieldGroup>
       <DialogFooter>
-        <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+        <DialogClose render={<Button variant="outline" disabled={actionLoading} />}>Cancel</DialogClose>
       </DialogFooter>
     </form>
   )

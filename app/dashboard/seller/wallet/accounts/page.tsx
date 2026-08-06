@@ -102,9 +102,7 @@ function normalizePhone(phone: string): string {
 
 function validatePhoneNumber(phone: string): boolean {
   const cleaned = normalizePhone(phone)
-  if (!/^0\d{9}$/.test(cleaned)) return false
-  const prefix = cleaned.substring(1, 3)
-  return MOBILE_MONEY_PROVIDERS.some((p) => p.prefixes.includes(prefix))
+  return /^0\d{9}$/.test(cleaned)
 }
 
 function detectMobileProvider(phone: string): { value: string; label: string; color: string; mno: string; apiSupported: boolean } | null {
@@ -371,60 +369,105 @@ function AccountForm({
   const [verifying, setVerifying] = React.useState(false)
   const [verifiedName, setVerifiedName] = React.useState<string | null>(null)
   const [lookupError, setLookupError] = React.useState<string | null>(null)
+  const [apiDetectedProvider, setApiDetectedProvider] = React.useState<{ value: string; label: string; color: string; mno: string; apiSupported: boolean } | null>(null)
+  const [manualProvider, setManualProvider] = React.useState("")
   const lookupTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const detectedProvider = accountType === "mobile" ? detectMobileProvider(accountNumber) : null
+  const prefixProvider = accountType === "mobile" ? detectMobileProvider(accountNumber) : null
+  const detectedProvider = prefixProvider ?? apiDetectedProvider
   const phoneValid = accountType === "mobile" ? validatePhoneNumber(accountNumber) : validateBankAccountNumber(accountNumber)
-  const providerValid = accountType === "mobile" ? !!detectedProvider : provider.trim().length > 0
+  const providerValid = accountType === "mobile"
+    ? (!!detectedProvider || manualProvider.trim().length > 0)
+    : provider.trim().length > 0
   const formValid = providerValid && accountName.trim() && accountNumber.trim() && phoneValid
 
   // Auto name-lookup via backend /payments/name-lookup API
-  // Only call API for providers the backend supports (MPESA, AIRTEL, TIGOPESA, HALOPESA)
+  // If prefix is known and API-supported, call API directly.
+  // If prefix is unknown, try API with each supported MNO until one succeeds.
   React.useEffect(() => {
-    if (accountType !== "mobile" || !phoneValid || !detectedProvider) {
+    if (accountType !== "mobile" || !phoneValid) {
       setVerifiedName(null)
       setLookupError(null)
+      setApiDetectedProvider(null)
       return
     }
-    // Skip API call for unsupported providers — user enters name manually
-    if (!detectedProvider.apiSupported) {
+    // Known prefix & API-supported — direct lookup
+    if (prefixProvider && prefixProvider.apiSupported) {
+      setApiDetectedProvider(null)
+      if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current)
+      lookupTimeoutRef.current = setTimeout(async () => {
+        setVerifying(true)
+        setLookupError(null)
+        try {
+          const cleaned = normalizePhone(accountNumber)
+          const res = await api.post<{ success: boolean; account_name: string | null; provider: string | null; account_number: string; message: string | null }>("/payments/name-lookup", {
+            account_number: cleaned,
+            provider: prefixProvider.mno,
+          })
+          if (res.success && res.account_name) {
+            setVerifiedName(res.account_name)
+            setAccountName(res.account_name)
+          } else {
+            setVerifiedName(null)
+          }
+        } catch (err) {
+          setVerifiedName(null)
+          setLookupError(getApiError(err))
+        } finally {
+          setVerifying(false)
+        }
+      }, 800)
+      return () => {
+        if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current)
+      }
+    }
+    // Known prefix but not API-supported — skip API, user enters name manually
+    if (prefixProvider && !prefixProvider.apiSupported) {
       setVerifiedName(null)
       setLookupError(null)
+      setApiDetectedProvider(null)
       return
     }
+    // Unknown prefix — try API with each supported MNO to detect provider
+    const supportedMNOs = MOBILE_MONEY_PROVIDERS.filter((p) => p.apiSupported)
     if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current)
     lookupTimeoutRef.current = setTimeout(async () => {
       setVerifying(true)
       setLookupError(null)
-      try {
-        const cleaned = normalizePhone(accountNumber)
-        const res = await api.post<{ success: boolean; account_name: string | null; provider: string | null; account_number: string; message: string | null }>("/payments/name-lookup", {
-          account_number: cleaned,
-          provider: detectedProvider.mno,
-        })
-        if (res.success && res.account_name) {
-          setVerifiedName(res.account_name)
-          setAccountName(res.account_name)
-        } else {
-          setVerifiedName(null)
+      setApiDetectedProvider(null)
+      const cleaned = normalizePhone(accountNumber)
+      for (const p of supportedMNOs) {
+        try {
+          const res = await api.post<{ success: boolean; account_name: string | null; provider: string | null; account_number: string; message: string | null }>("/payments/name-lookup", {
+            account_number: cleaned,
+            provider: p.mno,
+          })
+          if (res.success && res.account_name) {
+            setApiDetectedProvider(p)
+            setVerifiedName(res.account_name)
+            setAccountName(res.account_name)
+            return
+          }
+        } catch {
+          // Try next provider
         }
-      } catch (err) {
-        setVerifiedName(null)
-        setLookupError(getApiError(err))
-      } finally {
-        setVerifying(false)
       }
+      // All providers failed — user enters name manually
+      setVerifiedName(null)
+      setVerifying(false)
     }, 800)
     return () => {
       if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current)
     }
-  }, [accountType, accountNumber, phoneValid, detectedProvider])
+  }, [accountType, accountNumber, phoneValid, prefixProvider])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!formValid) return
-    const cleanedNumber = accountNumber.replace(/[\s-]/g, "")
-    const finalProvider = accountType === "mobile" ? (detectedProvider?.value ?? "") : provider.trim()
+    const cleanedNumber = normalizePhone(accountNumber)
+    const finalProvider = accountType === "mobile"
+      ? (detectedProvider?.value ?? manualProvider.trim())
+      : provider.trim()
     onSubmit({ account_type: accountType, provider: finalProvider, account_name: accountName.trim(), account_number: cleanedNumber, is_default: isDefault })
   }
 
@@ -441,7 +484,7 @@ function AccountForm({
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => { setAccountType("mobile"); setProvider(""); setAccountNumber("") }}
+              onClick={() => { setAccountType("mobile"); setProvider(""); setAccountNumber(""); setManualProvider("") }}
               disabled={actionLoading}
               className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
                 accountType === "mobile"
@@ -516,10 +559,26 @@ function AccountForm({
                 </div>
               </div>
             )}
-            {touched.accountNumber && accountNumber && phoneValid && !detectedProvider && (
-              <FieldDescription className="text-amber-600">
-                Unknown provider for this number prefix
-              </FieldDescription>
+            {phoneValid && accountNumber && !detectedProvider && verifying && (
+              <div className="mt-2 flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3">
+                <Loader2 className="size-5 animate-spin text-blue-600" />
+                <span className="text-sm text-blue-700">Detecting provider via API...</span>
+              </div>
+            )}
+            {phoneValid && accountNumber && !detectedProvider && !verifying && (
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+                  <Smartphone className="size-5 text-amber-600" />
+                  <span className="text-sm text-amber-700">Provider not detected. Enter provider name manually.</span>
+                </div>
+                <Input
+                  value={manualProvider}
+                  onChange={(e) => setManualProvider(e.target.value)}
+                  placeholder="e.g. Halopesa"
+                  disabled={actionLoading}
+                  className="text-sm"
+                />
+              </div>
             )}
           </Field>
         ) : (

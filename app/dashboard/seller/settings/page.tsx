@@ -63,6 +63,7 @@ import {
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
+import { useSearchParams } from "next/navigation"
 import { PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -181,7 +182,16 @@ const docStatusConfig: Record<string, { label: string; variant: "default" | "sec
 
 export default function SellerSettingsPage() {
   const { user } = useAuth()
-  const [activeStep, setActiveStep] = React.useState(0)
+  const searchParams = useSearchParams()
+  const initialStep = (() => {
+    const step = searchParams.get("step")
+    if (step === "business") return 1
+    if (step === "kyc") return 2
+    if (step === "notifications") return 3
+    if (step === "security") return 4
+    return 0
+  })()
+  const [activeStep, setActiveStep] = React.useState(initialStep)
   const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
 

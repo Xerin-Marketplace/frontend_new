@@ -90,13 +90,22 @@ function maskAccountNumber(num: string): string {
   return `•••• •••• ${num.slice(-4)}`
 }
 
+function normalizePhone(phone: string): string {
+  let cleaned = phone.replace(/[\s-]/g, "")
+  if (cleaned.startsWith("+255")) cleaned = "0" + cleaned.slice(4)
+  else if (cleaned.startsWith("255")) cleaned = "0" + cleaned.slice(3)
+  return cleaned
+}
+
 function validatePhoneNumber(phone: string): boolean {
-  const cleaned = phone.replace(/[\s-]/g, "")
-  return /^(\+?255|0)[67]\d{8}$/.test(cleaned)
+  const cleaned = normalizePhone(phone)
+  if (!/^0\d{9}$/.test(cleaned)) return false
+  const prefix = cleaned.substring(1, 3)
+  return MOBILE_MONEY_PROVIDERS.some((p) => p.prefixes.includes(prefix))
 }
 
 function detectMobileProvider(phone: string): { value: string; label: string; color: string; mno: string } | null {
-  const cleaned = phone.replace(/[\s-]/g, "").replace(/^(\+?255)/, "0")
+  const cleaned = normalizePhone(phone)
   if (cleaned.length < 4 || !cleaned.startsWith("0")) return null
   const prefix = cleaned.substring(1, 3)
   for (const p of MOBILE_MONEY_PROVIDERS) {

@@ -464,6 +464,8 @@ function UploadForm({
   const [docType, setDocType] = React.useState(documentTypes[0])
   const [file, setFile] = React.useState<File | null>(null)
   const [progress, setProgress] = React.useState(0)
+  const [error, setError] = React.useState<string | null>(null)
+  const [dragOver, setDragOver] = React.useState(false)
 
   React.useEffect(() => {
     if (actionLoading) {
@@ -480,6 +482,19 @@ function UploadForm({
     }
   }, [actionLoading])
 
+  const validateFile = (f: File): string | null => {
+    const allowedTypes = ["application/pdf", "image/jpeg", "image/jpg", "image/png"]
+    const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png"]
+    const ext = f.name.toLowerCase().substring(f.name.lastIndexOf("."))
+    if (!allowedTypes.includes(f.type) && !allowedExtensions.includes(ext)) {
+      return "Invalid file type. Only PDF, JPG, and PNG are allowed."
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      return "File too large. Maximum size is 5MB."
+    }
+    return null
+  }
+
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!file) return
@@ -489,6 +504,14 @@ function UploadForm({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
+      const err = validateFile(f)
+      if (err) {
+        setError(err)
+        setFile(null)
+        e.target.value = ""
+        return
+      }
+      setError(null)
       setFile(f)
       setProgress(0)
       onSubmit(docType, f)
@@ -530,7 +553,29 @@ function UploadForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="file">Choose File</FieldLabel>
-          <div className="relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 transition-colors hover:border-muted-foreground/50">
+          <label
+            htmlFor="file"
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragOver(false)
+              const f = e.dataTransfer.files?.[0]
+              if (f) {
+                const err = validateFile(f)
+                if (err) { setError(err); return }
+                setError(null)
+                setFile(f)
+                setProgress(0)
+                onSubmit(docType, f)
+              }
+            }}
+            className={`relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 transition-colors cursor-pointer ${
+              dragOver
+                ? "border-primary bg-primary/5"
+                : "border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-muted/5"
+            } ${error ? "border-red-500/50" : ""}`}
+          >
             {actionLoading ? (
               <>
                 <Loader2 className="size-8 animate-spin text-primary" />
@@ -548,23 +593,25 @@ function UploadForm({
                   <Upload className="size-6 text-muted-foreground" />
                 </div>
                 <p className="text-sm font-medium text-foreground">
-                  Click to browse your computer
+                  {file ? file.name : "Click to browse or drag a file here"}
                 </p>
                 <p className="text-xs text-muted-foreground/70">PDF, JPG, PNG — max 5MB</p>
               </>
             )}
-            <Input
-              id="file"
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              onChange={handleFileChange}
-              disabled={actionLoading}
-              className="absolute inset-0 cursor-pointer opacity-0"
-              required
-            />
-          </div>
-          {file && !actionLoading && (
-            <FieldDescription>Selected: {file.name}</FieldDescription>
+          </label>
+          <input
+            id="file"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            onChange={handleFileChange}
+            disabled={actionLoading}
+            className="sr-only"
+          />
+          {error && (
+            <FieldDescription className="text-red-500">{error}</FieldDescription>
+          )}
+          {file && !actionLoading && !error && (
+            <FieldDescription>Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</FieldDescription>
           )}
         </Field>
       </FieldGroup>

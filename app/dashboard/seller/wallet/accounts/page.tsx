@@ -56,14 +56,17 @@ type PaginatedPayoutAccounts = {
   results: PayoutAccount[]
 }
 
-const MOBILE_MONEY_PROVIDERS: { value: string; label: string; color: string; prefixes: string[]; mno: string }[] = [
-  { value: "M-Pesa", label: "M-Pesa (Vodacom)", color: "bg-red-500", prefixes: ["74", "75", "76"], mno: "MPESA" },
-  { value: "Airtel Money", label: "Airtel Money", color: "bg-red-600", prefixes: ["68", "69", "78"], mno: "AIRTEL" },
-  { value: "Tigo Pesa", label: "Tigo Pesa (Halotel)", color: "bg-blue-500", prefixes: ["65", "71", "60"], mno: "TIGOPESA" },
-  { value: "Halopesa", label: "Halopesa", color: "bg-green-500", prefixes: ["62"], mno: "HALOPESA" },
-  { value: "Azampesa", label: "Azampesa", color: "bg-orange-500", prefixes: ["70"], mno: "AZAMPESA" },
-  { value: "TTCL Pesa", label: "TTCL Pesa", color: "bg-purple-500", prefixes: ["73"], mno: "TTCL" },
-  { value: "EzyPesa", label: "EzyPesa (Zantel)", color: "bg-amber-500", prefixes: ["77"], mno: "EZYPESA" },
+// Providers supported by the backend /payments/name-lookup API
+const API_SUPPORTED_MNOS = new Set(["MPESA", "AIRTEL", "TIGOPESA", "HALOPESA"])
+
+const MOBILE_MONEY_PROVIDERS: { value: string; label: string; color: string; prefixes: string[]; mno: string; apiSupported: boolean }[] = [
+  { value: "M-Pesa", label: "M-Pesa (Vodacom)", color: "bg-red-500", prefixes: ["74", "75", "76"], mno: "MPESA", apiSupported: true },
+  { value: "Airtel Money", label: "Airtel Money", color: "bg-red-600", prefixes: ["68", "69", "78"], mno: "AIRTEL", apiSupported: true },
+  { value: "Tigo Pesa", label: "Tigo Pesa (Halotel)", color: "bg-blue-500", prefixes: ["65", "71", "60"], mno: "TIGOPESA", apiSupported: true },
+  { value: "Halopesa", label: "Halopesa", color: "bg-green-500", prefixes: ["62"], mno: "HALOPESA", apiSupported: true },
+  { value: "Azampesa", label: "Azampesa", color: "bg-orange-500", prefixes: ["70"], mno: "AZAMPESA", apiSupported: false },
+  { value: "TTCL Pesa", label: "TTCL Pesa", color: "bg-purple-500", prefixes: ["73"], mno: "TTCL", apiSupported: false },
+  { value: "EzyPesa", label: "EzyPesa (Zantel)", color: "bg-amber-500", prefixes: ["77"], mno: "EZYPESA", apiSupported: false },
 ]
 
 const BANK_PROVIDERS = [
@@ -104,13 +107,13 @@ function validatePhoneNumber(phone: string): boolean {
   return MOBILE_MONEY_PROVIDERS.some((p) => p.prefixes.includes(prefix))
 }
 
-function detectMobileProvider(phone: string): { value: string; label: string; color: string; mno: string } | null {
+function detectMobileProvider(phone: string): { value: string; label: string; color: string; mno: string; apiSupported: boolean } | null {
   const cleaned = normalizePhone(phone)
   if (cleaned.length < 4 || !cleaned.startsWith("0")) return null
   const prefix = cleaned.substring(1, 3)
   for (const p of MOBILE_MONEY_PROVIDERS) {
     if (p.prefixes.includes(prefix)) {
-      return { value: p.value, label: p.label, color: p.color, mno: p.mno }
+      return { value: p.value, label: p.label, color: p.color, mno: p.mno, apiSupported: p.apiSupported }
     }
   }
   return null
@@ -375,9 +378,16 @@ function AccountForm({
   const providerValid = accountType === "mobile" ? !!detectedProvider : provider.trim().length > 0
   const formValid = providerValid && accountName.trim() && accountNumber.trim() && phoneValid
 
-  // Auto name-lookup via AzamPay API when phone is valid and provider is detected
+  // Auto name-lookup via backend /payments/name-lookup API
+  // Only call API for providers the backend supports (MPESA, AIRTEL, TIGOPESA, HALOPESA)
   React.useEffect(() => {
     if (accountType !== "mobile" || !phoneValid || !detectedProvider) {
+      setVerifiedName(null)
+      setLookupError(null)
+      return
+    }
+    // Skip API call for unsupported providers — user enters name manually
+    if (!detectedProvider.apiSupported) {
       setVerifiedName(null)
       setLookupError(null)
       return
@@ -387,16 +397,14 @@ function AccountForm({
       setVerifying(true)
       setLookupError(null)
       try {
-        const cleaned = accountNumber.replace(/[\s-]/g, "")
-        const res = await api.post<{ success: boolean; account_name: string | null; message: string | null }>("/payments/name-lookup", {
+        const cleaned = normalizePhone(accountNumber)
+        const res = await api.post<{ success: boolean; account_name: string | null; provider: string | null; account_number: string; message: string | null }>("/payments/name-lookup", {
           account_number: cleaned,
           provider: detectedProvider.mno,
         })
         if (res.success && res.account_name) {
           setVerifiedName(res.account_name)
-          if (!accountName.trim()) {
-            setAccountName(res.account_name)
-          }
+          setAccountName(res.account_name)
         } else {
           setVerifiedName(null)
         }
@@ -493,7 +501,11 @@ function AccountForm({
                       <span className="flex items-center gap-1 text-xs text-green-600">
                         <CheckCircle2 className="size-3" /> Verified
                       </span>
-                    ) : null}
+                    ) : detectedProvider.apiSupported ? (
+                      <span className="text-xs text-muted-foreground">Enter name manually</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Manual entry</span>
+                    )}
                   </div>
                   {verifiedName && (
                     <p className="mt-0.5 text-xs text-green-600/80">Account: {verifiedName}</p>
@@ -568,7 +580,7 @@ function AccountForm({
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, accountName: true }))}
-            placeholder={verifying ? "Verifying account name..." : "e.g. Acme Trading Co."}
+            placeholder={verifying ? "Verifying account name..." : "e.g. John Doe"}
             required
             disabled={actionLoading || verifying}
           />

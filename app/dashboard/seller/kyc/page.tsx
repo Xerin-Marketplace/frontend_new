@@ -39,6 +39,8 @@ import {
   Eye,
   Loader2,
   RotateCcw,
+  Lock,
+  Send,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton } from "@/components/skeletons"
@@ -195,6 +197,10 @@ export default function SellerKYCPage() {
     }
   }
 
+  const canEdit = kycStatus === "pending" || kycStatus === "rejected" || kycStatus === "not_submitted"
+  const isLocked = !canEdit
+  const allUploaded = kycStatusData?.can_submit_for_review ?? false
+
   if (loading) {
     return (
       <PageSkeleton>
@@ -245,14 +251,23 @@ export default function SellerKYCPage() {
       </Card>
 
       {/* Upload Button */}
-      <div className="flex justify-end">
-        <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-          <DialogTrigger render={<Button><Upload className="size-4" /> Upload Document</Button>} />
-          <DialogContent className="sm:max-w-[480px]">
-            <UploadForm onSubmit={handleUpload} actionLoading={actionLoading} existingTypes={documents.map((d) => d.document_type)} />
-          </DialogContent>
-        </Dialog>
-      </div>
+      {canEdit && (
+        <div className="flex justify-end">
+          <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+            <DialogTrigger render={<Button><Upload className="size-4" /> Upload Document</Button>} />
+            <DialogContent className="sm:max-w-[480px]">
+              <UploadForm onSubmit={handleUpload} actionLoading={actionLoading} existingTypes={documents.map((d) => d.document_type)} />
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
+      {isLocked && (
+        <div className="flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm text-blue-700">
+          <Lock className="size-4 shrink-0" />
+          <span>Documents are locked for review. You can view them but cannot make changes.</span>
+        </div>
+      )}
 
       {/* Documents List */}
       <Card>
@@ -298,16 +313,18 @@ export default function SellerKYCPage() {
                     <Button variant="ghost" size="icon-sm" title="Preview" onClick={() => setPreviewDoc(doc)}>
                       <Eye className="size-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      disabled={actionLoading}
-                      onClick={() => setDeleteDoc(doc)}
-                      title="Delete"
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={actionLoading}
+                        onClick={() => setDeleteDoc(doc)}
+                        title="Delete"
+                        className="text-red-500 hover:text-red-600"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -319,17 +336,68 @@ export default function SellerKYCPage() {
       {/* Required Documents Info */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Required Documents</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Required Documents</CardTitle>
+            <span className="text-xs text-muted-foreground">
+              {kycStatusData?.uploaded_documents?.length ?? documents.length} / {kycStatusData?.required_documents?.length ?? documentTypes.length} uploaded
+            </span>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2">
-            {(kycStatusData?.required_documents ?? documentTypes).map((doc) => (
-              <div key={doc} className="flex items-center gap-2 text-sm">
-                <FileCheck className="size-4 text-muted-foreground" />
-                {documentTypeLabels[doc] ?? doc}
-              </div>
-            ))}
+            {(kycStatusData?.required_documents ?? documentTypes).map((doc) => {
+              const isUploaded = (kycStatusData?.uploaded_documents ?? documents.map((d) => d.document_type)).includes(doc)
+              return (
+                <div key={doc} className={`flex items-center gap-2 text-sm ${isUploaded ? "text-green-600" : "text-muted-foreground"}`}>
+                  {isUploaded ? (
+                    <CheckCircle2 className="size-4 text-green-600" />
+                  ) : (
+                    <FileCheck className="size-4 text-muted-foreground" />
+                  )}
+                  {documentTypeLabels[doc] ?? doc}
+                </div>
+              )
+            })}
           </div>
+
+          {canEdit && allUploaded && (
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm text-green-700">
+                <CheckCircle2 className="size-4" />
+                <span>All documents uploaded! Submit for verification to continue.</span>
+              </div>
+              <Button
+                size="sm"
+                disabled={actionLoading}
+                onClick={async () => {
+                  setActionLoading(true)
+                  try {
+                    const res = await api.get<KycStatusResponse>("/sellers/kyc-status")
+                    setKycStatusData(res)
+                    setKycStatus(res.seller_status as KycStatus)
+                    toast.add({
+                      title: "Submitted for verification!",
+                      description: "Your documents are now under review. This usually takes 1-2 business days.",
+                      type: "success",
+                    })
+                  } catch (err) {
+                    toast.add({ title: "Failed to submit", description: getApiError(err), type: "error" })
+                  } finally {
+                    setActionLoading(false)
+                  }
+                }}
+              >
+                {actionLoading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                Submit for Verification
+              </Button>
+            </div>
+          )}
+
+          {canEdit && !allUploaded && (kycStatusData?.missing_documents?.length ?? 0) > 0 && (
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-700">
+              <strong>Remaining:</strong> {(kycStatusData?.missing_documents ?? []).map((d) => documentTypeLabels[d] ?? d).join(", ")}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -4,10 +4,7 @@ import * as React from "react"
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -31,8 +28,11 @@ import {
   Plus,
   Trash2,
   CreditCard,
-  Banknote,
   Loader2,
+  Shield,
+  Smartphone,
+  CheckCircle2,
+  Star,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton } from "@/components/skeletons"
@@ -54,6 +54,61 @@ type PaginatedPayoutAccounts = {
   page: number
   page_size: number
   results: PayoutAccount[]
+}
+
+const MOBILE_MONEY_PROVIDERS = [
+  { value: "M-Pesa", label: "M-Pesa (Vodacom)", prefix: "07", color: "bg-red-500" },
+  { value: "Airtel Money", label: "Airtel Money", prefix: "068", color: "bg-red-600" },
+  { value: "Tigo Pesa", label: "Tigo Pesa (Halotel)", prefix: "065", color: "bg-blue-500" },
+  { value: "Halopesa", label: "Halopesa", prefix: "062", color: "bg-green-500" },
+  { value: "TTCL Pesa", label: "TTCL Pesa", prefix: "073", color: "bg-purple-500" },
+  { value: "Zantel EzyPesa", label: "EzyPesa (Zantel)", prefix: "077", color: "bg-amber-500" },
+] as const
+
+const BANK_PROVIDERS = [
+  "CRDB Bank",
+  "NMB Bank",
+  "NBC (National Bank of Commerce)",
+  "Stanbic Bank",
+  "Standard Chartered Bank",
+  "Barclays Bank",
+  "Exim Bank",
+  "Bank of Africa (BOA)",
+  "KCB Bank Tanzania",
+  "Equity Bank Tanzania",
+  "TPB Bank",
+  "Akiba Commercial Bank",
+  "Mufin Bank",
+  "DCB Commercial Bank",
+  "Maendeleo Bank",
+  "Stanbic Bank Tanzania",
+] as const
+
+function maskAccountNumber(num: string): string {
+  if (num.length <= 4) return num
+  return `•••• •••• ${num.slice(-4)}`
+}
+
+function validatePhoneNumber(phone: string): boolean {
+  const cleaned = phone.replace(/[\s-]/g, "")
+  return /^(\+?255|0)[67]\d{8}$/.test(cleaned)
+}
+
+function getProviderColor(provider: string): string {
+  const found = MOBILE_MONEY_PROVIDERS.find((p) => p.value === provider)
+  return found?.color ?? "bg-muted"
+}
+
+function getProviderIcon(accountType: string) {
+  return accountType === "mobile" ? Smartphone : CreditCard
+}
+
+function getProviderLabel(accountType: string, provider: string): string {
+  if (accountType === "mobile") {
+    const found = MOBILE_MONEY_PROVIDERS.find((p) => p.value === provider)
+    return found?.label ?? provider
+  }
+  return provider
 }
 
 function getApiError(err: unknown): string {
@@ -89,7 +144,7 @@ export default function SellerPayoutAccountsPage() {
       })
       setAccounts((prev) => [...prev, newAccount])
       setAccountOpen(false)
-      toast.add({ title: "Account added!", description: `${data.provider} account has been added.`, type: "success" })
+      toast.add({ title: "Account added!", description: `${data.provider} account has been added successfully.`, type: "success" })
     } catch (err) {
       toast.add({ title: "Failed to add account", description: getApiError(err), type: "error" })
     } finally {
@@ -106,6 +161,19 @@ export default function SellerPayoutAccountsPage() {
       toast.add({ title: "Account deleted", description: "Payout account has been removed.", type: "success" })
     } catch (err) {
       toast.add({ title: "Failed to delete account", description: getApiError(err), type: "error" })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleSetDefault = async (id: string) => {
+    setActionLoading(true)
+    try {
+      await api.post(`/sellers/payout-accounts/${id}/default`, {})
+      setAccounts((prev) => prev.map((a) => ({ ...a, is_default: a.id === id })))
+      toast.add({ title: "Default account updated", description: "Your default payout account has been changed.", type: "success" })
+    } catch (err) {
+      toast.add({ title: "Failed to update default", description: getApiError(err), type: "error" })
     } finally {
       setActionLoading(false)
     }
@@ -132,10 +200,19 @@ export default function SellerPayoutAccountsPage() {
         </div>
         <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
           <DialogTrigger render={<Button><Plus className="size-4" /> Add Account</Button>} />
-          <DialogContent className="sm:max-w-[480px]">
+          <DialogContent className="sm:max-w-[520px]">
             <AccountForm onSubmit={handleAddAccount} actionLoading={actionLoading} />
           </DialogContent>
         </Dialog>
+      </div>
+
+      {/* Security Notice */}
+      <div className="flex items-center gap-3 rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3">
+        <Shield className="size-5 shrink-0 text-green-600" />
+        <div className="text-sm">
+          <p className="font-medium text-green-700">Secured with bank-level encryption</p>
+          <p className="text-xs text-green-600/80">Your account details are encrypted and never shared with third parties.</p>
+        </div>
       </div>
 
       {/* Accounts Grid */}
@@ -156,59 +233,73 @@ export default function SellerPayoutAccountsPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {accounts.map((account) => (
-            <Card key={account.id} className="relative overflow-hidden">
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                      {account.account_type === "mobile" ? (
-                        <Banknote className="size-5 text-muted-foreground" />
-                      ) : (
-                        <CreditCard className="size-5 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{account.provider}</span>
-                        {account.is_default && <Badge variant="default" className="text-xs">Default</Badge>}
+          {accounts.map((account) => {
+            const ProviderIcon = getProviderIcon(account.account_type)
+            const providerColor = account.account_type === "mobile" ? getProviderColor(account.provider) : "bg-blue-600"
+            return (
+              <Card key={account.id} className={`relative overflow-hidden ${account.is_default ? "border-primary/50" : ""}`}>
+                {account.is_default && (
+                  <div className="absolute right-0 top-0 rounded-bl-lg bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                    Default
+                  </div>
+                )}
+                <CardContent className="pt-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex size-10 shrink-0 items-center justify-center rounded-md ${providerColor} text-white`}>
+                        <ProviderIcon className="size-5" />
                       </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground capitalize">
-                        {account.account_type === "mobile" ? "Mobile Money" : "Bank Account"}
+                      <div>
+                        <span className="font-medium text-sm">{getProviderLabel(account.account_type, account.provider)}</span>
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {account.account_type === "mobile" ? "Mobile Money" : "Bank Account"}
+                        </div>
                       </div>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={actionLoading}
+                      onClick={() => setDeleteAccount(account)}
+                      className="text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={actionLoading}
-                    onClick={() => setDeleteAccount(account)}
-                    className="text-red-500 hover:text-red-600"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Account Holder</span>
-                    <span className="font-medium">{account.account_name}</span>
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Account Holder</span>
+                      <span className="font-medium">{account.account_name}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{account.account_type === "mobile" ? "Phone Number" : "Account Number"}</span>
+                      <span className="font-mono font-medium">{maskAccountNumber(account.account_number)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Currency</span>
+                      <span className="font-medium">{account.currency}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Added</span>
+                      <span className="font-medium">{new Date(account.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Account Number</span>
-                    <span className="font-mono font-medium">{account.account_number}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Currency</span>
-                    <span className="font-medium">{account.currency}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Added</span>
-                    <span className="font-medium">{new Date(account.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  {!account.is_default && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 w-full"
+                      disabled={actionLoading}
+                      onClick={() => handleSetDefault(account.id)}
+                    >
+                      <Star className="size-3" />
+                      Set as Default
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
 
@@ -241,16 +332,23 @@ function AccountForm({
   onSubmit: (data: { account_type: string; provider: string; account_name: string; account_number: string; is_default: boolean }) => void
   actionLoading: boolean
 }) {
-  const [accountType, setAccountType] = React.useState("bank")
+  const [accountType, setAccountType] = React.useState("mobile")
   const [provider, setProvider] = React.useState("")
   const [accountName, setAccountName] = React.useState("")
   const [accountNumber, setAccountNumber] = React.useState("")
   const [isDefault, setIsDefault] = React.useState(false)
+  const [touched, setTouched] = React.useState<Record<string, boolean>>({})
+
+  const phoneValid = accountType === "mobile" ? validatePhoneNumber(accountNumber) : accountNumber.trim().length >= 5
+  const formValid = provider.trim() && accountName.trim() && accountNumber.trim() && phoneValid
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!provider.trim() || !accountName.trim() || !accountNumber.trim()) return
-    onSubmit({ account_type: accountType, provider: provider.trim(), account_name: accountName.trim(), account_number: accountNumber.trim(), is_default: isDefault })
+    if (!formValid) return
+    const cleanedNumber = accountType === "mobile"
+      ? accountNumber.replace(/[\s-]/g, "")
+      : accountNumber.trim()
+    onSubmit({ account_type: accountType, provider: provider.trim(), account_name: accountName.trim(), account_number: cleanedNumber, is_default: isDefault })
   }
 
   return (
@@ -260,25 +358,118 @@ function AccountForm({
         <DialogDescription>Enter your bank or mobile money details for receiving payouts.</DialogDescription>
       </DialogHeader>
       <FieldGroup>
+        {/* Account Type Toggle */}
         <Field>
-          <FieldLabel htmlFor="accountType">Account Type</FieldLabel>
-          <select id="accountType" value={accountType} onChange={(e) => setAccountType(e.target.value)} disabled={actionLoading} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50">
-            <option value="bank">Bank Account</option>
-            <option value="mobile">Mobile Money</option>
-          </select>
+          <FieldLabel>Account Type</FieldLabel>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => { setAccountType("mobile"); setProvider(""); setAccountNumber("") }}
+              disabled={actionLoading}
+              className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                accountType === "mobile"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-input bg-background hover:bg-accent"
+              }`}
+            >
+              <Smartphone className="size-4" />
+              Mobile Money
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAccountType("bank"); setProvider(""); setAccountNumber("") }}
+              disabled={actionLoading}
+              className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                accountType === "bank"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-input bg-background hover:bg-accent"
+              }`}
+            >
+              <CreditCard className="size-4" />
+              Bank Account
+            </button>
+          </div>
         </Field>
+
+        {/* Provider */}
         <Field>
-          <FieldLabel htmlFor="provider">{accountType === "mobile" ? "Mobile Money Provider" : "Bank Name"}</FieldLabel>
-          <Input id="provider" value={provider} onChange={(e) => setProvider(e.target.value)} placeholder={accountType === "mobile" ? "e.g. M-Pesa, Airtel Money" : "e.g. CRDB Bank"} required disabled={actionLoading} />
+          <FieldLabel htmlFor="provider">
+            {accountType === "mobile" ? "Mobile Money Provider" : "Bank Name"}
+          </FieldLabel>
+          {accountType === "mobile" ? (
+            <select
+              id="provider"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              disabled={actionLoading}
+              required
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            >
+              <option value="" disabled>Select provider...</option>
+              {MOBILE_MONEY_PROVIDERS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+          ) : (
+            <select
+              id="provider"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              disabled={actionLoading}
+              required
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            >
+              <option value="" disabled>Select bank...</option>
+              {BANK_PROVIDERS.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          )}
         </Field>
+
+        {/* Account Holder Name */}
         <Field>
           <FieldLabel htmlFor="accountName">Account Holder Name</FieldLabel>
-          <Input id="accountName" value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="e.g. Acme Trading Co." required disabled={actionLoading} />
+          <Input
+            id="accountName"
+            value={accountName}
+            onChange={(e) => setAccountName(e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, accountName: true }))}
+            placeholder="e.g. Acme Trading Co."
+            required
+            disabled={actionLoading}
+          />
         </Field>
+
+        {/* Account Number / Phone */}
         <Field>
-          <FieldLabel htmlFor="accountNumber">{accountType === "mobile" ? "Phone Number" : "Account Number"}</FieldLabel>
-          <Input id="accountNumber" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder={accountType === "mobile" ? "e.g. 0712 345 678" : "0150-1234-5678"} required className="font-mono" disabled={actionLoading} />
+          <FieldLabel htmlFor="accountNumber">
+            {accountType === "mobile" ? "Phone Number" : "Account Number"}
+          </FieldLabel>
+          <Input
+            id="accountNumber"
+            value={accountNumber}
+            onChange={(e) => setAccountNumber(e.target.value)}
+            onBlur={() => setTouched((t) => ({ ...t, accountNumber: true }))}
+            placeholder={accountType === "mobile" ? "e.g. 0712 345 678" : "e.g. 0150-1234-5678"}
+            required
+            className="font-mono"
+            disabled={actionLoading}
+          />
+          {accountType === "mobile" && touched.accountNumber && accountNumber && !phoneValid && (
+            <FieldDescription className="text-red-500">
+              Enter a valid Tanzanian phone number (e.g. 0712345678 or +255712345678)
+            </FieldDescription>
+          )}
+          {accountType === "mobile" && phoneValid && accountNumber && (
+            <FieldDescription className="text-green-600">
+              <CheckCircle2 className="inline size-3 mr-1" />
+              Valid phone number
+            </FieldDescription>
+          )}
         </Field>
+
+        {/* Default Checkbox */}
         <Field>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} disabled={actionLoading} className="size-4 rounded border-input" />
@@ -288,7 +479,7 @@ function AccountForm({
       </FieldGroup>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" disabled={actionLoading} />}>Cancel</DialogClose>
-        <Button type="submit" disabled={actionLoading}>
+        <Button type="submit" disabled={actionLoading || !formValid}>
           {actionLoading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
           Add Account
         </Button>

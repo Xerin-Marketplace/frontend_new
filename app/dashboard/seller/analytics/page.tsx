@@ -122,24 +122,19 @@ export default function SellerAnalyticsPage() {
 
   React.useEffect(() => {
     const days = range === "7d" ? 7 : range === "30d" ? 30 : 90
-    const params = `?days=${days}`
+    const end = new Date()
+    const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000)
+    const params = `?start_at=${start.toISOString()}&end_at=${end.toISOString()}`
     setLoading(true)
-    Promise.all([
+    Promise.allSettled([
       api.get<AnalyticsOverview>(`/analytics/seller/me/overview${params}`),
       api.get<AnalyticsSeriesPoint[]>(`/analytics/seller/me/sales${params}`),
       api.get<AnalyticsRankingRow[]>(`/analytics/seller/me/products${params}`),
     ])
-      .then(([o, s, p]) => {
-        setOverview(o)
-        setSales(s)
-        setProducts(p)
-      })
-      .catch((err) => {
-        toast.add({
-          title: "Failed to load analytics",
-          description: getApiError(err),
-          type: "error",
-        })
+      .then(([oRes, sRes, pRes]) => {
+        if (oRes.status === "fulfilled") setOverview(oRes.value)
+        if (sRes.status === "fulfilled") setSales(sRes.value)
+        if (pRes.status === "fulfilled") setProducts(pRes.value)
       })
       .finally(() => setLoading(false))
   }, [range])

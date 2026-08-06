@@ -32,6 +32,8 @@ import {
   ArrowUpRight,
   Plus,
   Clock,
+  AlertCircle,
+  XCircle,
 } from "lucide-react"
 import { TShIcon } from "@/components/tsh-icon"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Area, AreaChart } from "recharts"
@@ -40,6 +42,8 @@ import { StatsCardSkeleton, TableSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/toast"
 import Link from "next/link"
+import { useAuth } from "@/lib/auth-context"
+import { cn } from "@/lib/utils"
 
 // ─── Types ───
 type AnalyticsOverview = {
@@ -130,6 +134,14 @@ type SellerOrderList = {
   results: SellerOrder[]
 }
 
+type KycStatusResponse = {
+  seller_status: string
+  required_documents: string[]
+  uploaded_documents: string[]
+  missing_documents: string[]
+  can_submit_for_review: boolean
+}
+
 // ─── Helpers ───
 function formatPrice(price: number): string {
   return `TSh ${Number(price).toLocaleString()}`
@@ -170,35 +182,35 @@ const chartConfig = {
 
 // ─── Component ───
 export default function SellerDashboardPage() {
+  const { user } = useAuth()
   const [overview, setOverview] = React.useState<AnalyticsOverview | null>(null)
   const [sales, setSales] = React.useState<SalesPoint[]>([])
   const [products, setProducts] = React.useState<ProductRanking[]>([])
   const [orderSummary, setOrderSummary] = React.useState<SellerOrderSummary | null>(null)
   const [recentOrders, setRecentOrders] = React.useState<SellerOrder[]>([])
+  const [kycStatus, setKycStatus] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     setLoading(true)
-    Promise.all([
-      api.get<AnalyticsOverview>("/analytics/seller/me/overview?days=30"),
-      api.get<SalesPoint[]>("/analytics/seller/me/sales?days=30"),
-      api.get<ProductRanking[]>("/analytics/seller/me/products?days=30&limit=5"),
+    Promise.allSettled([
+      api.get<AnalyticsOverview>("/analytics/seller/me/overview"),
+      api.get<SalesPoint[]>("/analytics/seller/me/sales"),
+      api.get<ProductRanking[]>("/analytics/seller/me/products?limit=5"),
       api.get<SellerOrderSummary>("/seller/orders/summary"),
       api.get<SellerOrderList>("/seller/orders?page=1&page_size=5"),
+      api.get<KycStatusResponse>("/sellers/kyc-status"),
     ])
-      .then(([ov, sl, pr, sum, orders]) => {
-        setOverview(ov)
-        setSales(sl)
-        setProducts(pr)
-        setOrderSummary(sum)
-        setRecentOrders(orders.results)
-      })
-      .catch((err) => {
-        toast.add({
-          title: "Failed to load dashboard",
-          description: getApiError(err),
-          type: "error",
-        })
+      .then(([ovRes, slRes, prRes, sumRes, ordersRes, kycRes]) => {
+        if (ovRes.status === "fulfilled") setOverview(ovRes.value)
+        if (slRes.status === "fulfilled") setSales(slRes.value)
+        if (prRes.status === "fulfilled") setProducts(prRes.value)
+        if (sumRes.status === "fulfilled") setOrderSummary(sumRes.value)
+        if (ordersRes.status === "fulfilled") {
+          const val = ordersRes.value
+          setRecentOrders(Array.isArray(val?.results) ? val.results : Array.isArray(val) ? val : [])
+        }
+        if (kycRes.status === "fulfilled") setKycStatus(kycRes.value.seller_status)
       })
       .finally(() => setLoading(false))
   }, [])
@@ -280,8 +292,12 @@ export default function SellerDashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-sm text-muted-foreground">
-            Welcome back! Here&apos;s what&apos;s happening with your store today.
+          <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+            Welcome back, {user?.first_name ?? "Seller"}
+            {kycStatus === "approved" && (
+              <img src="/verified.png" alt="Verified" className="inline-block size-4" />
+            )}
+            ! Here&apos;s what&apos;s happening with your store today.
           </p>
         </div>
         <Link href="/dashboard/seller/products/new" className={buttonVariants()}>
@@ -289,6 +305,44 @@ export default function SellerDashboardPage() {
           Add Product
         </Link>
       </div>
+
+      {/* KYC Notification Banner */}
+      {kycStatus !== "approved" && kycStatus !== null && (
+        <Link href="/dashboard/seller/kyc" className="block">
+          <Card className={cn(
+            "cursor-pointer transition-all hover:shadow-md animate-fade-in-up",
+            kycStatus === "rejected" ? "border-red-500/50" : kycStatus === "pending" || kycStatus === "pending_review" ? "border-blue-500/50" : "border-amber-500/50"
+          )}>
+            <CardContent className="flex items-center gap-3 py-4">
+              <div className={cn(
+                "flex size-10 shrink-0 items-center justify-center rounded-full",
+                kycStatus === "rejected" ? "bg-red-100 text-red-600 dark:bg-red-950/50" :
+                kycStatus === "pending" || kycStatus === "pending_review" ? "bg-blue-100 text-blue-600 dark:bg-blue-950/50" :
+                "bg-amber-100 text-amber-600 dark:bg-amber-950/50"
+              )}>
+                {kycStatus === "rejected" ? <XCircle className="size-5" /> :
+                 kycStatus === "pending" || kycStatus === "pending_review" ? <Clock className="size-5" /> :
+                 <AlertCircle className="size-5" />}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">
+                  {kycStatus === "rejected" ? "KYC Verification Rejected" :
+                   kycStatus === "pending" || kycStatus === "pending_review" ? "KYC Under Review" :
+                   "Complete KYC Verification"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {kycStatus === "rejected" ? "Please re-upload corrected documents to continue selling." :
+                   kycStatus === "pending" || kycStatus === "pending_review" ? "Your documents are being reviewed. This usually takes 1-2 business days." :
+                   "Upload your business documents to verify your account and start selling."}
+                </p>
+              </div>
+              <Badge variant={kycStatus === "rejected" ? "destructive" : kycStatus === "pending" || kycStatus === "pending_review" ? "secondary" : "outline"}>
+                {kycStatus === "rejected" ? "Action Needed" : kycStatus === "pending" || kycStatus === "pending_review" ? "Pending" : "Required"}
+              </Badge>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">

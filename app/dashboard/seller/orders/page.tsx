@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
   Table,
@@ -45,9 +45,11 @@ import {
   MapPin,
   Phone,
   ArrowRight,
+  Plus,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { StatsCardSkeleton, TableSkeleton, PageSkeleton } from "@/components/skeletons"
+import Link from "next/link"
 
 type OrderStatus = "new" | "accepted" | "processing" | "ready_to_ship" | "shipped" | "delivered" | "cancellation_requested" | "cancelled"
 
@@ -165,20 +167,16 @@ export default function SellerOrdersPage() {
   const [actionLoading, setActionLoading] = React.useState(false)
 
   React.useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.get<OrderListResponse>("/seller/orders"),
       api.get<OrderSummary>("/seller/orders/summary"),
     ])
       .then(([listRes, sumRes]) => {
-        setOrders(listRes.results)
-        setSummary(sumRes)
-      })
-      .catch((err) => {
-        toast.add({
-          title: "Failed to load orders",
-          description: getApiError(err),
-          type: "error",
-        })
+        if (listRes.status === "fulfilled") {
+          const val = listRes.value
+          setOrders(Array.isArray(val?.results) ? val.results : Array.isArray(val) ? val : [])
+        }
+        if (sumRes.status === "fulfilled") setSummary(sumRes.value)
       })
       .finally(() => setLoading(false))
   }, [])
@@ -272,11 +270,17 @@ export default function SellerOrdersPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Orders</h2>
-        <p className="text-sm text-muted-foreground">
-          Manage incoming orders, accept, process, and ship to customers.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Orders</h2>
+          <p className="text-sm text-muted-foreground">
+            Manage incoming orders, accept, process, and ship to customers.
+          </p>
+        </div>
+        <Link href="/dashboard/seller/products/new" className={buttonVariants({ variant: "outline" })}>
+          <Plus className="size-4" />
+          Add Product
+        </Link>
       </div>
 
       {/* Summary Stats */}

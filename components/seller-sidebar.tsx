@@ -6,21 +6,15 @@ import {
   LayoutDashboard,
   Package,
   ShoppingBag,
-  BarChart3,
   Wallet,
-  Tag,
   Truck,
-  MessageSquare,
   Settings,
   FileCheck,
   Boxes,
-  CreditCard,
-  TrendingUp,
   type LucideIcon,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import {
@@ -67,8 +61,6 @@ const sellerData = {
       icon: Package,
       items: [
         { title: "All Products", url: "/dashboard/seller/products" },
-        { title: "Add Product", url: "/dashboard/seller/products/new" },
-        { title: "Categories", url: "/dashboard/seller/products/categories" },
         { title: "Brands", url: "/dashboard/seller/products/brands" },
       ],
     },
@@ -100,11 +92,6 @@ const sellerData = {
       title: "KYC & Verification",
       url: "/dashboard/seller/kyc",
       icon: FileCheck,
-      items: [
-        { title: "Status", url: "/dashboard/seller/kyc" },
-        { title: "Upload Documents", url: "/dashboard/seller/kyc/upload" },
-        { title: "Document History", url: "/dashboard/seller/kyc/documents" },
-      ],
     },
     {
       title: "Wallet & Payouts",
@@ -122,13 +109,6 @@ const sellerData = {
       title: "Store Profile",
       url: "/dashboard/seller/store",
       icon: Store,
-      items: [
-        { title: "Business Info", url: "/dashboard/seller/store" },
-        { title: "Business Profile", url: "/dashboard/seller/store/profile" },
-        { title: "Store Appearance", url: "/dashboard/seller/store/appearance" },
-        { title: "Policies", url: "/dashboard/seller/store/policies" },
-        { title: "Social Links", url: "/dashboard/seller/store/social" },
-      ],
     },
     {
       title: "Shipping",
@@ -152,23 +132,6 @@ const sellerData = {
       ],
     },
   ],
-  projects: [
-    {
-      name: "Analytics",
-      url: "/dashboard/seller/analytics",
-      icon: BarChart3,
-    },
-    {
-      name: "Promotions",
-      url: "/dashboard/seller/promotions",
-      icon: Tag,
-    },
-    {
-      name: "Messages",
-      url: "/dashboard/seller/messages",
-      icon: MessageSquare,
-    },
-  ],
 }
 
 export function SellerSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -179,7 +142,6 @@ export function SellerSidebar({ ...props }: React.ComponentProps<typeof Sidebar>
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={sellerData.navMain} />
-        <NavProjects projects={sellerData.projects} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={sellerData.user} />

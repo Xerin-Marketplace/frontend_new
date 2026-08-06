@@ -37,6 +37,8 @@ import {
   Trash2,
   AlertCircle,
   Eye,
+  Loader2,
+  RotateCcw,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { PageSkeleton } from "@/components/skeletons"
@@ -109,6 +111,7 @@ export default function SellerKYCPage() {
   const [loading, setLoading] = React.useState(true)
   const [uploadOpen, setUploadOpen] = React.useState(false)
   const [deleteDoc, setDeleteDoc] = React.useState<KycDocument | null>(null)
+  const [previewDoc, setPreviewDoc] = React.useState<KycDocument | null>(null)
   const [actionLoading, setActionLoading] = React.useState(false)
 
   React.useEffect(() => {
@@ -132,14 +135,21 @@ export default function SellerKYCPage() {
   const handleUpload = async (docType: string, file: File) => {
     setActionLoading(true)
     try {
+      const existing = documents.find((d) => d.document_type === docType)
+      if (existing) {
+        await api.delete(`/sellers/kyc-documents/${existing.id}`)
+      }
       const formData = new FormData()
       formData.append("document_type", docType)
       formData.append("file", file)
       const newDoc = await api.upload<KycDocument>("/sellers/kyc-documents", formData)
-      setDocuments((prev) => [newDoc, ...prev])
+      setDocuments((prev) => {
+        const filtered = prev.filter((d) => d.document_type !== docType)
+        return [newDoc, ...filtered]
+      })
       setUploadOpen(false)
       toast.add({
-        title: "Document uploaded!",
+        title: existing ? "Document replaced!" : "Document uploaded!",
         description: `${documentTypeLabels[docType] ?? docType} has been submitted for review.`,
         type: "success",
       })
@@ -231,7 +241,7 @@ export default function SellerKYCPage() {
         <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
           <DialogTrigger render={<Button><Upload className="size-4" /> Upload Document</Button>} />
           <DialogContent className="sm:max-w-[480px]">
-            <UploadForm onSubmit={handleUpload} />
+            <UploadForm onSubmit={handleUpload} actionLoading={actionLoading} existingTypes={documents.map((d) => d.document_type)} />
           </DialogContent>
         </Dialog>
       </div>
@@ -277,7 +287,7 @@ export default function SellerKYCPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon-sm" title="View" onClick={() => window.open(doc.document_url, "_blank")}>
+                    <Button variant="ghost" size="icon-sm" title="Preview" onClick={() => setPreviewDoc(doc)}>
                       <Eye className="size-4" />
                     </Button>
                     <Button
@@ -321,7 +331,7 @@ export default function SellerKYCPage() {
           <DialogHeader>
             <DialogTitle>Delete Document?</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>{deleteDoc ? fileNameFromUrl(deleteDoc.document_url) : ""}</strong>? You can re-upload it later.
+              Are you sure you want to delete <strong>{deleteDoc ? documentTypeLabels[deleteDoc.document_type] ?? deleteDoc.document_type : ""}</strong>? You can re-upload it later.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -333,35 +343,73 @@ export default function SellerKYCPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Document Preview */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="size-5" />
+              {previewDoc ? documentTypeLabels[previewDoc.document_type] ?? previewDoc.document_type : ""}
+            </DialogTitle>
+            <DialogDescription>
+              {previewDoc ? fileNameFromUrl(previewDoc.document_url) : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-hidden rounded-lg border">
+            {previewDoc && previewDoc.document_url.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i) ? (
+              <img src={previewDoc.document_url} alt={previewDoc.document_type} className="h-full w-full object-contain" />
+            ) : previewDoc ? (
+              <iframe src={previewDoc.document_url} className="h-[60vh] w-full" title="Document Preview" />
+            ) : null}
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
+            <Button render={<a href={previewDoc?.document_url ?? "#"} target="_blank" rel="noopener noreferrer" />}>
+              <Eye className="size-4" />
+              Open Full
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
 function UploadForm({
   onSubmit,
+  actionLoading,
+  existingTypes,
 }: {
   onSubmit: (docType: string, file: File) => void
+  actionLoading: boolean
+  existingTypes: string[]
 }) {
   const [docType, setDocType] = React.useState(documentTypes[0])
   const [file, setFile] = React.useState<File | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (!file) return
     onSubmit(docType, file)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
-    if (f) setFile(f)
+    if (f) {
+      setFile(f)
+      onSubmit(docType, f)
+    }
   }
+
+  const isExisting = existingTypes.includes(docType)
 
   return (
     <form onSubmit={handleSubmit}>
       <DialogHeader>
         <DialogTitle>Upload KYC Document</DialogTitle>
         <DialogDescription>
-          Select document type and upload the file. Supported formats: PDF, JPG, PNG (max 5MB).
+          Select document type and choose a file. It will upload automatically. Supported: PDF, JPG, PNG (max 5MB).
         </DialogDescription>
       </DialogHeader>
       <FieldGroup>
@@ -374,27 +422,52 @@ function UploadForm({
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {documentTypes.map((t) => (
-              <option key={t} value={t}>{documentTypeLabels[t] ?? t}</option>
+              <option key={t} value={t}>
+                {documentTypeLabels[t] ?? t}{existingTypes.includes(t) ? " (replace)" : ""}
+              </option>
             ))}
           </select>
+          {isExisting && (
+            <FieldDescription className="text-amber-600">
+              <RotateCcw className="inline size-3 mr-1" />
+              A document of this type already exists. Uploading will replace it.
+            </FieldDescription>
+          )}
         </Field>
         <Field>
-          <FieldLabel htmlFor="file">File</FieldLabel>
-          <Input
-            id="file"
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={handleFileChange}
-            required
-          />
-          {file && (
+          <FieldLabel htmlFor="file">Choose File</FieldLabel>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-6 transition-colors hover:border-muted-foreground/50">
+            {actionLoading ? (
+              <>
+                <Loader2 className="size-8 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Uploading...</p>
+              </>
+            ) : (
+              <>
+                <Upload className="size-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Click to select a file
+                </p>
+                <p className="text-xs text-muted-foreground/70">PDF, JPG, PNG — max 5MB</p>
+              </>
+            )}
+            <Input
+              id="file"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={handleFileChange}
+              disabled={actionLoading}
+              className="absolute inset-0 cursor-pointer opacity-0"
+              required
+            />
+          </div>
+          {file && !actionLoading && (
             <FieldDescription>Selected: {file.name}</FieldDescription>
           )}
         </Field>
       </FieldGroup>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-        <Button type="submit"><Upload className="size-4" /> Upload</Button>
       </DialogFooter>
     </form>
   )

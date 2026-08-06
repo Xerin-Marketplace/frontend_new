@@ -40,7 +40,7 @@ import {
   Loader2,
   RotateCcw,
 } from "lucide-react"
-import { api, type ApiError } from "@/lib/api"
+import { api, type ApiError, API_BASE_URL } from "@/lib/api"
 import { PageSkeleton } from "@/components/skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -102,6 +102,15 @@ function getApiError(err: unknown): string {
 function fileNameFromUrl(url: string): string {
   const parts = url.split("/")
   return parts[parts.length - 1] || url
+}
+
+function resolveFileUrl(rawUrl: string): string {
+  if (/^https?:\/\//i.test(rawUrl)) return rawUrl
+  const normalized = rawUrl.replace(/\\/g, "/")
+  const uploadIdx = normalized.indexOf("uploads/")
+  const relPath = uploadIdx >= 0 ? normalized.slice(uploadIdx + 8) : normalized
+  const origin = API_BASE_URL.replace(/\/api\/v\d+\/?$/, "")
+  return `${origin}/uploads/${relPath}`
 }
 
 export default function SellerKYCPage() {
@@ -357,15 +366,15 @@ export default function SellerKYCPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-hidden rounded-lg border">
-            {previewDoc && previewDoc.document_url.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i) ? (
-              <img src={previewDoc.document_url} alt={previewDoc.document_type} className="h-full w-full object-contain" />
+            {previewDoc && resolveFileUrl(previewDoc.document_url).match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i) ? (
+              <img src={resolveFileUrl(previewDoc.document_url)} alt={previewDoc.document_type} className="h-full w-full object-contain" />
             ) : previewDoc ? (
-              <iframe src={previewDoc.document_url} className="h-[60vh] w-full" title="Document Preview" />
+              <iframe src={resolveFileUrl(previewDoc.document_url)} className="h-[60vh] w-full" title="Document Preview" />
             ) : null}
           </div>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
-            <Button render={<a href={previewDoc?.document_url ?? "#"} target="_blank" rel="noopener noreferrer" />}>
+            <Button render={<a href={previewDoc ? resolveFileUrl(previewDoc.document_url) : "#"} target="_blank" rel="noopener noreferrer" />}>
               <Eye className="size-4" />
               Open Full
             </Button>

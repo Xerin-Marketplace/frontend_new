@@ -66,6 +66,13 @@ type PayoutAccount = {
   created_at: string
 }
 
+type PaginatedPayoutAccounts = {
+  total: number
+  page: number
+  page_size: number
+  results: PayoutAccount[]
+}
+
 type WalletResponse = {
   id: string
   seller_id: string
@@ -110,11 +117,14 @@ export default function SellerPayoutsPage() {
   React.useEffect(() => {
     Promise.allSettled([
       api.get<PayoutRequest[]>("/wallet/me/payouts"),
-      api.get<PayoutAccount[]>("/sellers/payout-accounts"),
+      api.get<PaginatedPayoutAccounts>("/sellers/payout-accounts?page=1&page_size=100"),
       api.get<WalletResponse>("/wallet/me"),
     ]).then(([pyRes, accRes, wRes]) => {
       if (pyRes.status === "fulfilled") setPayouts(pyRes.value)
-      if (accRes.status === "fulfilled") setAccounts(accRes.value)
+      if (accRes.status === "fulfilled") {
+        const val = accRes.value
+        setAccounts(Array.isArray(val?.results) ? val.results : Array.isArray(val) ? val : [])
+      }
       if (wRes.status === "fulfilled") setWallet(wRes.value)
     }).finally(() => setLoading(false))
   }, [])

@@ -107,6 +107,13 @@ type PayoutAccount = {
   created_at: string
 }
 
+type PaginatedPayoutAccounts = {
+  total: number
+  page: number
+  page_size: number
+  results: PayoutAccount[]
+}
+
 const payoutStatusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending: { label: "Pending", variant: "secondary" },
   approved: { label: "Approved", variant: "secondary" },
@@ -147,13 +154,16 @@ export default function SellerWalletPage() {
       api.get<WalletResponse>("/wallet/me"),
       api.get<WalletTransaction[]>("/wallet/me/transactions"),
       api.get<PayoutRequest[]>("/wallet/me/payouts"),
-      api.get<PayoutAccount[]>("/sellers/payout-accounts"),
+      api.get<PaginatedPayoutAccounts>("/sellers/payout-accounts?page=1&page_size=100"),
     ])
       .then(([wRes, txRes, pyRes, accRes]) => {
         if (wRes.status === "fulfilled") setWallet(wRes.value)
         if (txRes.status === "fulfilled") setTransactions(txRes.value)
         if (pyRes.status === "fulfilled") setPayouts(pyRes.value)
-        if (accRes.status === "fulfilled") setAccounts(accRes.value)
+        if (accRes.status === "fulfilled") {
+          const val = accRes.value
+          setAccounts(Array.isArray(val?.results) ? val.results : Array.isArray(val) ? val : [])
+        }
       })
       .finally(() => setLoading(false))
   }, [])

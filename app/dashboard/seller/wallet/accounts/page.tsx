@@ -49,6 +49,13 @@ type PayoutAccount = {
   created_at: string
 }
 
+type PaginatedPayoutAccounts = {
+  total: number
+  page: number
+  page_size: number
+  results: PayoutAccount[]
+}
+
 function getApiError(err: unknown): string {
   const e = err as ApiError
   return e?.detail || "Something went wrong. Please try again."
@@ -62,8 +69,10 @@ export default function SellerPayoutAccountsPage() {
   const [actionLoading, setActionLoading] = React.useState(false)
 
   React.useEffect(() => {
-    api.get<PayoutAccount[]>("/sellers/payout-accounts")
-      .then(setAccounts)
+    api.get<PaginatedPayoutAccounts>("/sellers/payout-accounts?page=1&page_size=100")
+      .then((val) => {
+        setAccounts(Array.isArray(val?.results) ? val.results : Array.isArray(val) ? val : [])
+      })
       .finally(() => setLoading(false))
   }, [])
 

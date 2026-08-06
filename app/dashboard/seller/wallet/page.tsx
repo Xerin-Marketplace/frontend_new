@@ -143,24 +143,17 @@ export default function SellerWalletPage() {
   const [actionLoading, setActionLoading] = React.useState(false)
 
   React.useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.get<WalletResponse>("/wallet/me"),
       api.get<WalletTransaction[]>("/wallet/me/transactions"),
       api.get<PayoutRequest[]>("/wallet/me/payouts"),
       api.get<PayoutAccount[]>("/sellers/payout-accounts"),
     ])
-      .then(([w, txs, pyts, accs]) => {
-        setWallet(w)
-        setTransactions(txs)
-        setPayouts(pyts)
-        setAccounts(accs)
-      })
-      .catch((err) => {
-        toast.add({
-          title: "Failed to load wallet data",
-          description: getApiError(err),
-          type: "error",
-        })
+      .then(([wRes, txRes, pyRes, accRes]) => {
+        if (wRes.status === "fulfilled") setWallet(wRes.value)
+        if (txRes.status === "fulfilled") setTransactions(txRes.value)
+        if (pyRes.status === "fulfilled") setPayouts(pyRes.value)
+        if (accRes.status === "fulfilled") setAccounts(accRes.value)
       })
       .finally(() => setLoading(false))
   }, [])

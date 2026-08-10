@@ -14,7 +14,6 @@ import {
   Lock,
   CheckCircle2,
   Info,
-  Loader2,
   User,
   Mail,
   Phone,
@@ -33,6 +32,25 @@ import { toast } from "@/components/ui/toast"
 import { formatPrice } from "@/lib/store-types"
 import { useAuth } from "@/lib/auth-context"
 import { useCart } from "@/lib/cart-context"
+import { PhoneInput } from "@/components/ui/phone-input"
+import { 
+  Item, 
+  ItemContent, 
+  ItemMedia, 
+  ItemTitle,
+  ItemDescription,
+  ItemGroup
+} from "@/components/ui/item"
+import { Spinner } from "@/components/ui/spinner"
+import { Progress } from "@/components/ui/progress"
+import {
+  Questionnaire,
+  QuestionnaireChoice,
+  QuestionnaireChoices,
+  QuestionnaireDescription,
+  QuestionnaireItem,
+  QuestionnaireTitle,
+} from "@/components/ui/questionnaire"
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -150,10 +168,41 @@ export default function CheckoutPage() {
   const [newAddrPostalCode, setNewAddrPostalCode] = useState("")
 
   // Payment state
-  const [paymentMethod, setPaymentMethod] = useState("mobile_money")
+  const [paymentMethod, setPaymentMethod] = useState<string | null>(null)
   const [mnoProvider, setMnoProvider] = useState("mpesa")
   const [phoneNumber, setPhoneNumber] = useState("")
   const [notes, setNotes] = useState("")
+  const [paymentSubStep, setPaymentSubStep] = useState(0)
+  const [checkingStatus, setCheckingStatus] = useState(false)
+  const [statusAttempts, setStatusAttempts] = useState(0)
+  const [activePaymentId, setActivePaymentId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval>
+    if (checkingStatus && activePaymentId) {
+      timer = setInterval(async () => {
+        try {
+          const res = await api.get<PaymentResponse>(`/payments/${activePaymentId}`)
+          if (res.status === "completed") {
+            setCheckingStatus(false)
+            toast.add({ title: "Malipo yamepokelewa!", type: "success" })
+            router.push(`/checkout/success?order_id=${res.order_id}&payment_id=${res.id}`)
+          } else if (res.status === "failed") {
+            setCheckingStatus(false)
+            toast.add({ title: "Malipo yamekataliwa", type: "error" })
+          }
+          setStatusAttempts((p) => p + 1)
+          if (statusAttempts > 30) {
+            setCheckingStatus(false)
+            toast.add({ title: "Uhakiki umechukua muda mrefu", description: "Tafadhali kagua historia yako baadae.", type: "warning" })
+          }
+        } catch {
+          // ignore
+        }
+      }, 3000)
+    }
+    return () => clearInterval(timer)
+  }, [checkingStatus, activePaymentId, statusAttempts, router])
 
   const fetchAddresses = useCallback(async () => {
     try {
@@ -338,17 +387,20 @@ export default function CheckoutPage() {
         phone_number: paymentMethod === "mobile_money" ? phoneNumber.trim() : undefined,
       })
 
-      toast.add({ title: "Payment initiated", description: "Completing your payment...", type: "info" })
-
-      const checkoutUrl = payment.provider_response?.checkout_url
-
-      if (payment.status === "completed") {
-        toast.add({ title: "Payment successful!", type: "success" })
-        router.push(`/checkout/success?order_id=${order.id}&payment_id=${payment.id}`)
-      } else if (checkoutUrl) {
-        window.location.href = checkoutUrl
+      if (paymentMethod === "mobile_money") {
+        setActivePaymentId(payment.id)
+        setCheckingStatus(true)
+        setStatusAttempts(0)
+        toast.add({ title: "Ombi la Malipo Limetumwa", description: "Tafadhali kagua simu yako kuweka namba ya siri.", type: "info" })
+      } else if (paymentMethod === "card") {
+        const checkoutUrl = payment.provider_response?.checkout_url
+        if (checkoutUrl) {
+          window.location.href = checkoutUrl
+        } else {
+          router.push(`/checkout/processing?payment_id=${payment.id}&order_id=${order.id}`)
+        }
       } else {
-        router.push(`/checkout/processing?payment_id=${payment.id}&order_id=${order.id}`)
+        router.push(`/checkout/success?order_id=${order.id}&payment_id=${payment.id}`)
       }
     } catch (err) {
       toast.add({ title: "Failed to place order", description: getApiError(err), type: "error" })
@@ -700,130 +752,239 @@ export default function CheckoutPage() {
           {/* =================== STEP 1: PAYMENT =================== */}
           {step === 1 && (
             <div className="flex flex-col gap-6 animate-fade-in-up">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <CreditCard className="size-4 text-primary" />
-                    Payment Method
-                  </CardTitle>
-                  <CardDescription>Choose how you want to pay for your order</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    {PAYMENT_TYPES.map((type) => {
-                      const isSelected = paymentMethod === type.value
-                      const Icon = type.icon
-                      return (
-                        <button
-                          key={type.value}
-                          onClick={() => setPaymentMethod(type.value)}
-                          className={cn(
-                            "flex flex-col items-center gap-2 rounded-xl border p-4 transition-all",
-                            isSelected
-                              ? cn(type.border, type.bg, "ring-1 ring-offset-0")
-                              : "border-border hover:border-primary/30"
+              {checkingStatus ? (
+                <Card className="mx-auto w-full max-w-md">
+                  <CardContent className="flex flex-col items-center gap-6 py-12 text-center">
+                    <div className="relative">
+                      <div className="absolute inset-0 animate-[spin_3s_linear_infinite] rounded-full border-4 border-dashed border-primary/10" />
+                      <div className="relative flex size-24 items-center justify-center rounded-full bg-primary/5">
+                        <Spinner className="size-7 text-primary" />
+                      </div>
+                      <div className="absolute inset-0 animate-ping rounded-full bg-primary/5" />
+                    </div>
+
+                    <div className="space-y-3">
+                      <h2 className="text-base font-medium tracking-tight">Inahakiki Malipo...</h2>
+                      <p className="text-sm text-muted-foreground leading-relaxed px-4">
+                        Tafadhali angalia simu yako na uingize namba ya siri (PIN) ili kukamilisha malipo ya <strong>{formatPrice(total)}</strong>.
+                      </p>
+                    </div>
+
+                    <div className="w-full space-y-2">
+                      <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                        <span>Hali ya Uhakiki</span>
+                        <span>{statusAttempts}/30</span>
+                      </div>
+                      <Progress value={(statusAttempts / 30) * 100} className="h-1" />
+                    </div>
+
+                    <button
+                      onClick={() => setCheckingStatus(false)}
+                      className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      Ghairi na urudi nyuma
+                    </button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  {/* Left Column: Questionnaire Flow (7 cols) */}
+                  <div className="lg:col-span-7">
+                    <Questionnaire>
+                      {/* Sub-step 0: Select Method */}
+                      <QuestionnaireItem isActive={paymentSubStep === 0}>
+                        <div className="space-y-1">
+                          <QuestionnaireTitle>Njia ya Malipo</QuestionnaireTitle>
+                          <QuestionnaireDescription>Chagua jinsi ungependa kulipia agizo hili.</QuestionnaireDescription>
+                        </div>
+                        <QuestionnaireChoices>
+                          <QuestionnaireChoice
+                            value="mobile_money"
+                            selected={paymentMethod === "mobile_money"}
+                            onClick={() => {
+                              setPaymentMethod("mobile_money");
+                              setPaymentSubStep(1);
+                            }}
+                          >
+                            <span className="text-sm font-medium">Lipa kwa Simu</span>
+                            <span className="text-xs text-muted-foreground">M-Pesa, Tigo Pesa, Airtel Money, Halopesa</span>
+                          </QuestionnaireChoice>
+                          <QuestionnaireChoice
+                            value="card"
+                            selected={paymentMethod === "card"}
+                            onClick={() => {
+                              setPaymentMethod("card");
+                              setPaymentSubStep(1);
+                            }}
+                          >
+                            <span className="text-sm font-medium">Kadi ya Benki</span>
+                            <span className="text-xs text-muted-foreground">VISA, Mastercard (Via AzamPay)</span>
+                          </QuestionnaireChoice>
+                          <QuestionnaireChoice
+                            value="cash_on_delivery"
+                            selected={paymentMethod === "cash_on_delivery"}
+                            onClick={() => {
+                              setPaymentMethod("cash_on_delivery");
+                              setPaymentSubStep(1);
+                            }}
+                          >
+                            <span className="text-sm font-medium">Lipa Ukipokea (COD)</span>
+                            <span className="text-xs text-muted-foreground">Malipo ya pesa taslimu mlangoni</span>
+                          </QuestionnaireChoice>
+                        </QuestionnaireChoices>
+                      </QuestionnaireItem>
+
+                      {/* Sub-step 1: Details */}
+                      <QuestionnaireItem isActive={paymentSubStep === 1}>
+                        <div className="space-y-4">
+                          <button
+                            onClick={() => setPaymentSubStep(0)}
+                            className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
+                          >
+                            <ArrowLeft className="size-3" /> Badili njia ya malipo
+                          </button>
+
+                          {paymentMethod === "mobile_money" && (
+                            <div className="space-y-4 animate-fade-in-up">
+                              <QuestionnaireTitle>Lipa kwa Simu</QuestionnaireTitle>
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Mtoa Huduma</label>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    {MNO_PROVIDERS.map((provider) => (
+                                      <button
+                                        key={provider.value}
+                                        onClick={() => setMnoProvider(provider.value)}
+                                        className={cn(
+                                          "flex items-center justify-center gap-2 rounded-md border px-2 py-2 text-xs font-medium transition-colors",
+                                          mnoProvider === provider.value
+                                            ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/20"
+                                            : "border-border bg-card hover:bg-muted/50"
+                                        )}
+                                      >
+                                        <div className={cn("size-2 rounded-full", provider.dot)} />
+                                        {provider.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Namba ya Simu</label>
+                                  <PhoneInput
+                                    value={phoneNumber}
+                                    onChange={setPhoneNumber}
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           )}
-                        >
-                          <div className={cn(
-                            "flex size-10 items-center justify-center rounded-lg",
-                            isSelected ? type.color : "text-muted-foreground",
-                            isSelected ? type.bg : "bg-muted"
-                          )}>
-                            <Icon className="size-5" />
-                          </div>
-                          <span className={cn(
-                            "text-xs font-semibold",
-                            isSelected ? type.color : "text-muted-foreground"
-                          )}>
-                            {type.label}
-                          </span>
-                        </button>
-                      )
-                    })}
+
+                          {paymentMethod === "card" && (
+                            <div className="space-y-3 animate-fade-in-up">
+                              <QuestionnaireTitle>Kadi ya Benki</QuestionnaireTitle>
+                              <div className="flex gap-3 rounded-lg border bg-muted/50 p-4">
+                                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                                  <CreditCard className="size-4" />
+                                </div>
+                                <div className="space-y-0.5">
+                                  <p className="text-sm font-medium">Salama na AzamPay</p>
+                                  <p className="text-xs text-muted-foreground leading-relaxed">
+                                    Utaelekezwa kwenye ukurasa wa malipo wa AzamPay kukamilisha muamala wako kwa usalama.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {paymentMethod === "cash_on_delivery" && (
+                            <div className="space-y-3 animate-fade-in-up">
+                              <QuestionnaireTitle>Lipa Ukipokea</QuestionnaireTitle>
+                              <div className="flex gap-3 rounded-lg border bg-muted/50 p-4">
+                                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                                  <Truck className="size-4" />
+                                </div>
+                                <div className="space-y-0.5">
+                                  <p className="text-sm font-medium">Malipo Taslimu</p>
+                                  <p className="text-xs text-muted-foreground leading-relaxed">
+                                    Ulipia kiasi cha <strong>{formatPrice(total)}</strong> pindi utakapopokea bidhaa zako.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          <Button
+                            className="mt-2 w-full"
+                            onClick={handlePlaceOrder}
+                            loading={placing}
+                            disabled={placing || (paymentMethod === "mobile_money" && !phoneNumber)}
+                          >
+                            {paymentMethod === "cash_on_delivery" ? "Kamilisha Agizo" : `Lipia ${formatPrice(total)}`}
+                          </Button>
+                        </div>
+                      </QuestionnaireItem>
+                    </Questionnaire>
                   </div>
 
-                  {paymentMethod === "mobile_money" && (
-                    <div className="flex flex-col gap-3 animate-fade-in-up">
-                      <div>
-                        <label className="mb-2 block text-sm font-medium">Select Provider</label>
-                        <div className="flex flex-wrap gap-2">
-                          {MNO_PROVIDERS.map((provider) => {
-                            const isSelected = mnoProvider === provider.value
-                            return (
-                              <button
-                                key={provider.value}
-                                onClick={() => setMnoProvider(provider.value)}
-                                className={cn(
-                                  "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all",
-                                  isSelected
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border hover:border-primary/30"
-                                )}
-                              >
-                                <span className={cn("size-2.5 rounded-full", provider.dot)} />
-                                <span className={isSelected ? "text-primary" : "text-muted-foreground"}>
-                                  {provider.label}
-                                </span>
-                              </button>
-                            )
-                          })}
+                  {/* Right Column: Contact & Summary (5 cols) */}
+                  <div className="lg:col-span-5 space-y-4">
+                    {/* Contact Info */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Mawasiliano</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <ItemGroup>
+                          <Item variant="outline">
+                            <ItemMedia variant="icon">
+                              <User className="size-4" />
+                            </ItemMedia>
+                            <ItemContent>
+                              <ItemDescription>Jina Kamili</ItemDescription>
+                              <ItemTitle>{`${shipFirstName} ${shipLastName}`.trim() || "—"}</ItemTitle>
+                            </ItemContent>
+                          </Item>
+                          <Item variant="outline">
+                            <ItemMedia variant="icon">
+                              <Mail className="size-4" />
+                            </ItemMedia>
+                            <ItemContent>
+                              <ItemDescription>Barua Pepe</ItemDescription>
+                              <ItemTitle>{shipEmail || "—"}</ItemTitle>
+                            </ItemContent>
+                          </Item>
+                        </ItemGroup>
+                      </CardContent>
+                    </Card>
+
+                    {/* Payment Summary */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Muhtasari wa Malipo</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0 space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Bidhaa ({items.length})</span>
+                          <span className="font-medium">{formatPrice(subtotal)}</span>
                         </div>
-                      </div>
-                      <div>
-                        <label className="mb-2 block text-sm font-medium">Phone Number</label>
-                        <Input
-                          type="tel"
-                          placeholder="e.g. 0712345678"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          className="max-w-xs"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {paymentMethod === "card" && (
-                    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-                      <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
-                      <p className="text-sm text-amber-700 dark:text-amber-400">
-                        You will be redirected to AzamPay&apos;s secure checkout page to enter your card details.
-                      </p>
-                    </div>
-                  )}
-
-                  {paymentMethod === "cash_on_delivery" && (
-                    <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
-                      <Truck className="mt-0.5 size-4 shrink-0 text-blue-600" />
-                      <p className="text-sm text-blue-700 dark:text-blue-400">
-                        Pay with cash when your order is delivered. Please have the exact amount ready.
-                      </p>
-                    </div>
-                  )}
-
-                  {isAuthenticated && !isGuest && (
-                    <div>
-                      <label className="mb-2 block text-sm font-medium">Order Notes (Optional)</label>
-                      <Input
-                        placeholder="Any special instructions?"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                      />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Navigation Buttons */}
-              <div className="flex justify-between">
-                <Button variant="ghost" size="lg" className="gap-2" onClick={handlePrevStep}>
-                  <ArrowLeft className="size-4" />
-                  Back
-                </Button>
-                <Button size="lg" className="gap-2" onClick={handleNextStep}>
-                  Review Order
-                  <ArrowRight className="size-4" />
-                </Button>
-              </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Usafirishaji</span>
+                          <span className="font-medium text-green-600">{shippingCost === 0 ? "Bure" : formatPrice(shippingCost)}</span>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Jumla Kuu</span>
+                          <span className="text-lg font-bold text-primary">{formatPrice(total)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+                          <ShieldCheck className="size-3.5 text-green-600" />
+                          Malipo yako ni 100% Salama
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1088,10 +1249,16 @@ export default function CheckoutPage() {
               </div>
 
               {placing && (
-                <div className="flex items-center justify-center gap-2 rounded-lg bg-primary/5 p-3 text-sm text-primary">
-                  <Loader2 className="size-4 animate-spin" />
-                  Processing your payment securely...
-                </div>
+                <Item variant="muted">
+                  <ItemMedia>
+                    <Spinner className="size-5 text-primary" />
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemTitle className="text-xs font-medium text-foreground">
+                      Inachakata malipo salama...
+                    </ItemTitle>
+                  </ItemContent>
+                </Item>
               )}
 
               {isGuest && step < 2 && (

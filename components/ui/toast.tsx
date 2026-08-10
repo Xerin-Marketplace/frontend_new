@@ -1,12 +1,16 @@
 "use client"
 
 import * as React from "react"
-import {
-  Toast as ToastPrimitive,
-} from "@base-ui/react/toast"
-
+import { Toast as ToastPrimitive } from "@base-ui/react/toast"
 import { cn } from "@/lib/utils"
-import { CheckCircle2, Info, AlertTriangle, XCircle, Loader2, X } from "lucide-react"
+import { 
+  CheckCircle2, 
+  Info, 
+  AlertTriangle, 
+  XCircle, 
+  Loader2, 
+  X 
+} from "lucide-react"
 
 type ToastType = "default" | "success" | "info" | "warning" | "error" | "loading"
 
@@ -14,9 +18,9 @@ const toastIcons: Record<ToastType, React.ReactNode> = {
   default: null,
   success: <CheckCircle2 className="size-5 text-green-500" />,
   info: <Info className="size-5 text-blue-500" />,
-  warning: <AlertTriangle className="size-5 text-yellow-500" />,
+  warning: <AlertTriangle className="size-5 text-amber-500" />,
   error: <XCircle className="size-5 text-red-500" />,
-  loading: <Loader2 className="size-5 animate-spin text-muted-foreground" />,
+  loading: <Loader2 className="size-5 animate-spin text-primary" />,
 }
 
 let globalManager: ReturnType<typeof ToastPrimitive.createToastManager> | null = null
@@ -58,7 +62,7 @@ const toast = {
   ) {
     const manager = getManager()
     const id = manager.add({
-      title: options.loading ?? "Loading...",
+      title: options.loading ?? "Inakamilisha...",
       type: "loading",
     })
     promise.then(
@@ -66,14 +70,14 @@ const toast = {
         const message =
           typeof options.success === "function"
             ? options.success(data)
-            : options.success ?? "Success"
+            : options.success ?? "Imekamilika!"
         manager.update(id, { title: message, type: "success" })
       },
       (error) => {
         const message =
           typeof options.error === "function"
             ? options.error(error)
-            : options.error ?? "Error"
+            : options.error ?? "Imefeli!"
         manager.update(id, { title: message, type: "error" })
       }
     )
@@ -97,33 +101,27 @@ function ToasterViewport() {
   return (
     <ToastPrimitive.Viewport
       data-slot="toast-viewport"
-      className="fixed bottom-0 right-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:max-w-[400px]"
+      className="fixed bottom-0 right-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-3 p-6 sm:max-w-[420px]"
     >
       {toasts.map((t) => {
-          const type = (t.type as ToastType) ?? "default"
-          return (
-            <ToastPrimitive.Root key={t.id} toast={t}>
-            <ToastPrimitive.Content
-              data-slot="toast-content"
-              data-type={type}
-              className={cn(
-                "group/toast relative flex w-full items-start gap-3 rounded-xl border border-black/5 bg-white p-4 pr-10 text-sm shadow-xl",
-                "data-[ending-style]:animate-out data-[ending-style]:fade-out-0 data-[ending-style]:slide-out-to-right-full",
-                "data-[starting-style]:animate-in data-[starting-style]:fade-in-0 data-[starting-style]:slide-in-from-right-full",
-                "data-[type=success]:border-green-500/20 data-[type=success]:bg-white",
-                "data-[type=error]:border-red-500/20 data-[type=error]:bg-white",
-                "data-[type=warning]:border-yellow-500/20 data-[type=warning]:bg-white",
-                "data-[type=info]:border-blue-500/20 data-[type=info]:bg-white"
-              )}
-            >
+        const type = (t.type as ToastType) ?? "default"
+        return (
+          <ToastPrimitive.Root 
+            key={t.id} 
+            toast={t}
+            className="group/toast relative flex w-full flex-col overflow-hidden rounded-2xl border bg-background p-4 shadow-2xl transition-all duration-300 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:translate-y-4 data-[starting-style]:opacity-0 sm:data-[starting-style]:translate-x-4 sm:data-[starting-style]:translate-y-0"
+          >
+            <div className="flex w-full items-start gap-4">
               {toastIcons[type] && (
-                <div className="shrink-0">{toastIcons[type]}</div>
+                <div className="mt-0.5 shrink-0 transition-transform group-hover/toast:scale-110">
+                  {toastIcons[type]}
+                </div>
               )}
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
                 {t.title && (
                   <ToastPrimitive.Title
                     data-slot="toast-title"
-                    className="font-semibold text-sm text-black"
+                    className="text-[15px] font-bold leading-none tracking-tight text-foreground"
                   >
                     {t.title}
                   </ToastPrimitive.Title>
@@ -131,32 +129,46 @@ function ToasterViewport() {
                 {t.description && (
                   <ToastPrimitive.Description
                     data-slot="toast-description"
-                    className="text-sm text-black/60"
+                    className="text-[13px] leading-relaxed text-muted-foreground"
                   >
                     {t.description}
                   </ToastPrimitive.Description>
                 )}
+                
                 {t.actionProps && (
-                  <ToastPrimitive.Action
-                    data-slot="toast-action"
-                    className={cn(
-                      "mt-1 inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-border bg-transparent px-3 text-sm font-medium transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
-                    )}
-                    {...t.actionProps}
-                  />
+                  <div className="mt-3 flex items-center gap-2">
+                    <ToastPrimitive.Action
+                      data-slot="toast-action"
+                      className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md active:scale-95"
+                      {...t.actionProps}
+                    />
+                  </div>
                 )}
               </div>
+              
               <ToastPrimitive.Close
                 data-slot="toast-close"
-                className="absolute right-2 top-2 rounded-md p-1 text-black/40 opacity-0 transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none group-hover/toast:opacity-70"
-                aria-label="Close"
+                className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-muted/50 text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover/toast:opacity-100 focus:opacity-100"
+                aria-label="Funga"
               >
-                <X className="size-4" />
+                <X className="size-3.5" strokeWidth={2.5} />
               </ToastPrimitive.Close>
-            </ToastPrimitive.Content>
-            </ToastPrimitive.Root>
-          )
-        })}
+            </div>
+            
+            {/* Progress bar for auto-close */}
+            <div 
+              className={cn(
+                "absolute bottom-0 left-0 h-1 bg-primary/20 transition-all duration-150",
+                type === "success" && "bg-green-500/20",
+                type === "error" && "bg-red-500/20",
+                type === "warning" && "bg-amber-500/20",
+                type === "info" && "bg-blue-500/20"
+              )}
+              style={{ width: "100%" }}
+            />
+          </ToastPrimitive.Root>
+        )
+      })}
     </ToastPrimitive.Viewport>
   )
 }

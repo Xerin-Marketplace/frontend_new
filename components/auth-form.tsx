@@ -435,7 +435,7 @@ function AuthFormInner({
                   <Input
                     id="login-email"
                     type="email"
-                    placeholder="m@example.com"
+                    placeholder="barua-pepe@mfano.tz"
                     className={cn("pl-9", fieldErrorClass(loginErrors.email))}
                     value={loginEmail}
                     onChange={(e) => {
@@ -462,7 +462,7 @@ function AuthFormInner({
                   <Input
                     id="login-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
+                    placeholder="Neno la siri (Tumia herufi na namba)"
                     className={cn("pl-9 pr-9", fieldErrorClass(loginErrors.password))}
                     value={loginPassword}
                     onChange={(e) => {
@@ -516,7 +516,7 @@ function AuthFormInner({
                     <Input
                       id="reg-first-name"
                       type="text"
-                      placeholder="John"
+                      placeholder="Juma"
                       className={cn("pl-9", fieldErrorClass(regErrors.first_name))}
                       value={regFirstName}
                       onChange={(e) => {
@@ -533,7 +533,7 @@ function AuthFormInner({
                   <Input
                     id="reg-last-name"
                     type="text"
-                    placeholder="Doe"
+                    placeholder="Mussa"
                     className={cn(fieldErrorClass(regErrors.last_name))}
                     value={regLastName}
                     onChange={(e) => {
@@ -552,7 +552,7 @@ function AuthFormInner({
                   <Input
                     id="reg-email"
                     type="email"
-                    placeholder="m@example.com"
+                    placeholder="barua-pepe@mfano.tz"
                     className={cn("pl-9", fieldErrorClass(regErrors.email))}
                     value={regEmail}
                     onChange={(e) => {
@@ -581,7 +581,7 @@ function AuthFormInner({
                   <Input
                     id="reg-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Create a strong password"
+                    placeholder="Weka neno la siri imara"
                     className={cn("pl-9 pr-9", fieldErrorClass(regErrors.password))}
                     value={regPassword}
                     onChange={(e) => {
@@ -652,7 +652,7 @@ function AuthFormInner({
                     <Input
                       id="seller-first-name"
                       type="text"
-                      placeholder="John"
+                      placeholder="Juma"
                       className={cn("pl-9", fieldErrorClass(sellerErrors.first_name))}
                       value={sellerFirstName}
                       onChange={(e) => {
@@ -669,7 +669,7 @@ function AuthFormInner({
                   <Input
                     id="seller-last-name"
                     type="text"
-                    placeholder="Doe"
+                    placeholder="Mussa"
                     className={cn(fieldErrorClass(sellerErrors.last_name))}
                     value={sellerLastName}
                     onChange={(e) => {
@@ -688,7 +688,7 @@ function AuthFormInner({
                   <Input
                     id="seller-name"
                     type="text"
-                    placeholder="e.g. Xerin Marketplace"
+                    placeholder="e.g. Duka la Xerin"
                     className={cn("pl-9", fieldErrorClass(sellerErrors.business_name))}
                     value={sellerBusinessName}
                     onChange={(e) => {
@@ -707,7 +707,7 @@ function AuthFormInner({
                   <Input
                     id="seller-email"
                     type="email"
-                    placeholder="business@example.com"
+                    placeholder="biashara@mfano.tz"
                     className={cn("pl-9", fieldErrorClass(sellerErrors.email))}
                     value={sellerEmail}
                     onChange={(e) => {
@@ -765,7 +765,7 @@ function AuthFormInner({
                   <Input
                     id="seller-password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Create a strong password"
+                    placeholder="Weka neno la siri imara"
                     className={cn("pl-9 pr-9", fieldErrorClass(sellerErrors.password))}
                     value={sellerPassword}
                     onChange={(e) => {
@@ -982,7 +982,7 @@ function OtpVerificationForm({
                 />
               ))}
             </div>
-            <FieldDescription>Enter the 6-digit code sent to your phone.</FieldDescription>
+            <FieldDescription>Ingiza namba 6 ulizotumiwa kwenye simu yako.</FieldDescription>
           </Field>
 
           <Button type="submit" className="w-full" loading={loading} disabled={code.length < 4}>

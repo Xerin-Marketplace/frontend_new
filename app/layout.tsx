@@ -6,6 +6,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import { CartProvider } from "@/lib/cart-context";
 import { WishlistProvider } from "@/lib/wishlist-context";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toast";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -52,6 +53,7 @@ export default function RootLayout({
               <WishlistProvider>{children}</WishlistProvider>
             </CartProvider>
           </AuthProvider>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

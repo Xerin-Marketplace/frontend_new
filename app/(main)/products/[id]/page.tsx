@@ -226,7 +226,39 @@ export default function ProductDetailPage() {
             </div>
             <div>
               <p className="text-sm font-medium">Seller ID: {product.seller_id.slice(0, 8)}</p>
-              <p className="text-xs text-muted-foreground">Verified Seller</p>
+              <p className="text-xs font-medium text-green-600">✓ Verified Seller</p>
+            </div>
+          </div>
+
+          {/* Xerin Logistics badges */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center gap-2 rounded-lg border bg-primary/5 p-2.5">
+              <Store className="size-4 shrink-0 text-primary" />
+              <div>
+                <p className="text-xs font-semibold">Fulfilled by Xerin</p>
+                <p className="text-[10px] text-muted-foreground">Quality-checked dispatch</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border bg-primary/5 p-2.5">
+              <ShieldCheck className="size-4 shrink-0 text-primary" />
+              <div>
+                <p className="text-xs font-semibold">Buyer Protection</p>
+                <p className="text-[10px] text-muted-foreground">Secure payment hold</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border bg-primary/5 p-2.5">
+              <Truck className="size-4 shrink-0 text-primary" />
+              <div>
+                <p className="text-xs font-semibold">Xerin Express</p>
+                <p className="text-[10px] text-muted-foreground">Fast nationwide delivery</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border bg-primary/5 p-2.5">
+              <RotateCcw className="size-4 shrink-0 text-primary" />
+              <div>
+                <p className="text-xs font-semibold">7-Day Returns</p>
+                <p className="text-[10px] text-muted-foreground">Easy return process</p>
+              </div>
             </div>
           </div>
 
@@ -256,11 +288,11 @@ export default function ProductDetailPage() {
           <div className="grid grid-cols-3 gap-3 rounded-xl border p-4">
             <div className="flex flex-col items-center gap-1.5 text-center">
               <Truck className="size-5 text-primary" />
-              <p className="text-xs font-medium">Fast Delivery</p>
+              <p className="text-xs font-medium">Delivery by Xerin Express</p>
             </div>
             <div className="flex flex-col items-center gap-1.5 text-center">
               <ShieldCheck className="size-5 text-primary" />
-              <p className="text-xs font-medium">Secure Payment</p>
+              <p className="text-xs font-medium">Buyer Protection</p>
             </div>
             <div className="flex flex-col items-center gap-1.5 text-center">
               <RotateCcw className="size-5 text-primary" />
@@ -281,8 +313,8 @@ export default function ProductDetailPage() {
             <div className="prose max-w-none text-sm text-muted-foreground">
               <p>{product.description || "No description available."}</p>
               <p className="mt-3">
-                This product is sold by a verified seller on XerinMarket. All purchases
-                are protected by our secure payment escrow system.
+                This product is sold by a verified seller on XerinMarket. Your payment
+                is held securely and only released to the seller after you confirm delivery.
               </p>
             </div>
           </TabsContent>

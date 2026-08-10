@@ -34,6 +34,7 @@ import {
   Eye,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
+import { formatOrderRef } from "@/lib/store-types"
 import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 
 type OrderItem = {
@@ -207,7 +208,7 @@ export default function AdminOrdersPage() {
               ) : (
                 filteredOrders.map((o) => (
                   <TableRow key={o.id}>
-                    <TableCell className="font-mono text-xs">{o.id.slice(0, 8)}</TableCell>
+                    <TableCell className="font-mono text-xs">{formatOrderRef(o.id, o.created_at)}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{o.user_id.slice(0, 8)}</TableCell>
                     <TableCell className="font-medium">{formatPrice(Number(o.total))}</TableCell>
                     <TableCell>
@@ -244,7 +245,7 @@ export default function AdminOrdersPage() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Order Details</DialogTitle>
-            <DialogDescription>Order ID: {viewOrder?.id.slice(0, 8)}</DialogDescription>
+            <DialogDescription>Order Reference: {viewOrder ? formatOrderRef(viewOrder.id, viewOrder.created_at) : ""}</DialogDescription>
           </DialogHeader>
           {viewOrder && (
             <div className="flex flex-col gap-4">

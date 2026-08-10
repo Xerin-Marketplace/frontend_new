@@ -1,50 +1,48 @@
-import { Metadata } from "next"
+"use client"
+
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Flame, Tag, Clock, ArrowRight, Zap, TrendingDown } from "lucide-react"
-import { buttonVariants } from "@/components/ui/button"
+import { Flame, Tag, ArrowRight, Zap, TrendingDown, Package } from "lucide-react"
+import { buttonVariants, Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ProductCard } from "@/components/product-card"
+import { api, type ApiError } from "@/lib/api"
+import { toast } from "@/components/ui/toast"
+import type { ApiProduct } from "@/lib/store-types"
 
-export const metadata: Metadata = {
-  title: "Hot Deals — XerinMarket",
-  description: "Shop the hottest deals and biggest discounts on XerinMarket. Limited-time offers on electronics, fashion, home goods, and more.",
-}
-
-const dealCategories = [
-  { name: "Electronics", slug: "electronics", discount: "Up to 40% off", emoji: "📱" },
-  { name: "Fashion", slug: "fashion", discount: "Up to 60% off", emoji: "👕" },
-  { name: "Home & Kitchen", slug: "home", discount: "Up to 35% off", emoji: "🏠" },
-  { name: "Beauty", slug: "beauty", discount: "Up to 50% off", emoji: "💄" },
-  { name: "Sports & Fitness", slug: "sports", discount: "Up to 45% off", emoji: "⚽" },
-  { name: "Gaming", slug: "gaming", discount: "Up to 30% off", emoji: "🎮" },
-]
-
-const flashDeals = [
-  { name: "Wireless Earbuds Pro", originalPrice: 85000, salePrice: 49000, image: "https://picsum.photos/seed/deal1/400/400", sold: 73 },
-  { name: "Smart Watch Series 6", originalPrice: 120000, salePrice: 79000, image: "https://picsum.photos/seed/deal2/400/400", sold: 58 },
-  { name: "Bluetooth Speaker", originalPrice: 65000, salePrice: 39000, image: "https://picsum.photos/seed/deal3/400/400", sold: 89 },
-  { name: "Power Bank 20000mAh", originalPrice: 45000, salePrice: 29000, image: "https://picsum.photos/seed/deal4/400/400", sold: 92 },
-]
-
-const featuredDeals = [
-  { name: "Samsung Galaxy A54", originalPrice: 650000, salePrice: 499000, image: "https://picsum.photos/seed/feat1/500/500", rating: 4.5, reviews: 128 },
-  { name: "Nike Air Max 270", originalPrice: 180000, salePrice: 129000, image: "https://picsum.photos/seed/feat2/500/500", rating: 4.8, reviews: 342 },
-  { name: "Sony WH-1000XM5", originalPrice: 450000, salePrice: 349000, image: "https://picsum.photos/seed/feat3/500/500", rating: 4.9, reviews: 89 },
-  { name: "IKEA Office Chair", originalPrice: 250000, salePrice: 179000, image: "https://picsum.photos/seed/feat4/500/500", rating: 4.3, reviews: 56 },
-  { name: "Canon EOS R10", originalPrice: 1200000, salePrice: 949000, image: "https://picsum.photos/seed/feat5/500/500", rating: 4.7, reviews: 23 },
-  { name: "Adidas Ultraboost", originalPrice: 220000, salePrice: 159000, image: "https://picsum.photos/seed/feat6/500/500", rating: 4.6, reviews: 201 },
-  { name: "LG 4K Monitor 27\"", originalPrice: 380000, salePrice: 289000, image: "https://picsum.photos/seed/feat7/500/500", rating: 4.4, reviews: 67 },
-  { name: "Bose SoundLink Flex", originalPrice: 130000, salePrice: 89000, image: "https://picsum.photos/seed/feat8/500/500", rating: 4.8, reviews: 145 },
-]
-
-function formatPrice(price: number) {
-  return new Intl.NumberFormat("en-TZ", { style: "decimal" }).format(price) + " TZS"
-}
-
-function discountPercent(original: number, sale: number) {
-  return Math.round(((original - sale) / original) * 100)
+function getApiError(err: unknown): string {
+  const e = err as ApiError
+  return e?.detail || "Something went wrong. Please try again."
 }
 
 export default function DealsPage() {
+  const [products, setProducts] = useState<ApiProduct[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.get<ApiProduct[]>("/products?limit=100")
+      .then((data) => {
+        setProducts(data)
+        setError(null)
+      })
+      .catch((err) => {
+        const msg = getApiError(err)
+        setError(msg)
+        toast.add({ title: "Failed to load deals", description: msg, type: "error" })
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const dealProducts = products.filter((p) => p.sale_price && Number(p.sale_price) < Number(p.price))
+  const flashDeals = [...dealProducts].sort((a, b) => {
+    const pctA = (Number(a.price) - Number(a.sale_price)) / Number(a.price)
+    const pctB = (Number(b.price) - Number(b.sale_price)) / Number(b.price)
+    return pctB - pctA
+  }).slice(0, 4)
+  const featuredDeals = dealProducts.slice(0, 8)
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 md:py-12">
       {/* Hero Banner */}
@@ -69,124 +67,79 @@ export default function DealsPage() {
         </div>
       </div>
 
-      {/* Deal Categories */}
-      <div className="mb-12">
-        <h2 className="mb-6 text-xl font-bold tracking-tight">Shop by Category</h2>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-          {dealCategories.map((cat) => (
-            <Link
-              key={cat.slug}
-              href={`/products?category=${cat.slug}&deals=true`}
-              className="group flex flex-col items-center gap-2 rounded-xl border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-lg"
-            >
-              <span className="text-3xl">{cat.emoji}</span>
-              <span className="text-sm font-semibold">{cat.name}</span>
-              <span className="text-xs font-medium text-primary">{cat.discount}</span>
-            </Link>
+      {loading ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex flex-col gap-2">
+              <Skeleton className="aspect-square w-full rounded-lg" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-8 w-full" />
+            </div>
           ))}
         </div>
-      </div>
-
-      {/* Flash Deals */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Zap className="size-5 text-orange-500" />
-            <h2 className="text-xl font-bold tracking-tight">Flash Deals</h2>
-            <span className="rounded-md bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-600">
-              Ending Soon
-            </span>
-          </div>
-          <Link href="/products?deals=true" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-            View All <ArrowRight className="size-4" />
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+          <p className="text-lg font-medium">Failed to load deals</p>
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>Try Again</Button>
+        </div>
+      ) : dealProducts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+          <Package className="size-12 text-muted-foreground" />
+          <p className="text-lg font-medium">No deals available right now</p>
+          <p className="text-sm text-muted-foreground">Check back soon for new deals and discounts!</p>
+          <Link href="/products" className={cn(buttonVariants(), "gap-2")}>
+            Browse All Products
+            <ArrowRight className="size-4" />
           </Link>
         </div>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {flashDeals.map((deal) => {
-            const percent = discountPercent(deal.originalPrice, deal.salePrice)
-            return (
-              <Link
-                key={deal.name}
-                href="/products?deals=true"
-                className="group flex flex-col gap-3 rounded-xl border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-lg"
-              >
-                <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
-                  <img
-                    src={deal.image}
-                    alt={deal.name}
-                    className="size-full object-cover transition-transform group-hover:scale-105"
-                  />
-                  <span className="absolute left-2 top-2 rounded-md bg-red-500 px-2 py-1 text-xs font-bold text-white">
-                    -{percent}%
-                  </span>
-                </div>
-                <h3 className="line-clamp-1 text-sm font-semibold">{deal.name}</h3>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-bold text-primary">{formatPrice(deal.salePrice)}</span>
-                  <span className="text-xs text-muted-foreground line-through">{formatPrice(deal.originalPrice)}</span>
-                </div>
-                {/* Progress bar */}
+      ) : (
+        <>
+          {/* Flash Deals */}
+          {flashDeals.length > 0 && (
+            <div className="mb-12">
+              <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-orange-500"
-                      style={{ width: `${deal.sold}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-muted-foreground">{deal.sold}% sold</span>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Featured Deals */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingDown className="size-5 text-primary" />
-            <h2 className="text-xl font-bold tracking-tight">Featured Deals</h2>
-          </div>
-          <Link href="/products?deals=true" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-            View All <ArrowRight className="size-4" />
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {featuredDeals.map((deal) => {
-            const percent = discountPercent(deal.originalPrice, deal.salePrice)
-            return (
-              <Link
-                key={deal.name}
-                href="/products?deals=true"
-                className="group flex flex-col gap-3 rounded-xl border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-lg"
-              >
-                <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
-                  <img
-                    src={deal.image}
-                    alt={deal.name}
-                    className="size-full object-cover transition-transform group-hover:scale-105"
-                  />
-                  <span className="absolute left-2 top-2 rounded-md bg-red-500 px-2 py-1 text-xs font-bold text-white">
-                    -{percent}%
+                  <Zap className="size-5 text-orange-500" />
+                  <h2 className="text-xl font-bold tracking-tight">Flash Deals</h2>
+                  <span className="rounded-md bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-600">
+                    Biggest Discounts
                   </span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-medium text-yellow-500">★</span>
-                    <span className="text-xs text-muted-foreground">{deal.rating} ({deal.reviews})</span>
-                  </div>
-                  <h3 className="line-clamp-1 text-sm font-semibold">{deal.name}</h3>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-sm font-bold text-primary">{formatPrice(deal.salePrice)}</span>
-                    <span className="text-xs text-muted-foreground line-through">{formatPrice(deal.originalPrice)}</span>
-                  </div>
+                <Link href="/products?deals=true" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                  View All <ArrowRight className="size-4" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-4">
+                {flashDeals.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Featured Deals */}
+          {featuredDeals.length > 0 && (
+            <div className="mb-12">
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingDown className="size-5 text-primary" />
+                  <h2 className="text-xl font-bold tracking-tight">All Deals</h2>
                 </div>
-              </Link>
-            )
-          })}
-        </div>
-      </div>
+                <Link href="/products?deals=true" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                  View All <ArrowRight className="size-4" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-4">
+                {featuredDeals.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Newsletter / CTA */}
       <div className="flex flex-col items-center gap-4 rounded-2xl border bg-muted/30 p-8 text-center">

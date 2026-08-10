@@ -128,7 +128,7 @@ export default function CustomerTermsPage() {
               <div className="flex items-start gap-2.5">
                 <ShieldCheck className="size-5 shrink-0 text-primary" />
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Escrow Protection</p>
+                  <p className="text-sm font-semibold text-foreground">Secure Payment Protection</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Your payment is held securely until the seller confirms and ships your order. Funds are released to the seller only after you confirm receipt or the automatic confirmation period expires.
                   </p>

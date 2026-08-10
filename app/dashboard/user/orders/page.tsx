@@ -34,7 +34,7 @@ import {
   ShoppingBag,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
-import { formatPrice } from "@/lib/store-types"
+import { formatPrice, formatOrderRef } from "@/lib/store-types"
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -95,6 +95,7 @@ export default function UserOrdersPage() {
     if (search) {
       const term = search.toLowerCase()
       result = result.filter((o) =>
+        formatOrderRef(o.id, o.created_at).toLowerCase().includes(term) ||
         (o.order_number ?? o.id).toLowerCase().includes(term) ||
         o.items.some((i) => i.product_name?.toLowerCase().includes(term))
       )
@@ -125,7 +126,7 @@ export default function UserOrdersPage() {
       for (const item of order.items) {
         await api.post("/cart/items", { product_id: item.product_id, quantity: item.quantity })
       }
-      toast.add({ title: "Items added to cart!", description: `${order.items.length} item(s) from ${order.order_number ?? order.id.slice(0, 8)} added.`, type: "success" })
+      toast.add({ title: "Items added to cart!", description: `${order.items.length} item(s) from ${formatOrderRef(order.id, order.created_at)} added.`, type: "success" })
     } catch (err) {
       toast.add({ title: "Failed to re-order", description: getApiError(err), type: "error" })
     }
@@ -186,7 +187,7 @@ export default function UserOrdersPage() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold">{order.order_number ?? order.id.slice(0, 8)}</span>
+                        <span className="font-semibold">{formatOrderRef(order.id, order.created_at)}</span>
                         <Badge variant={cfg.variant} className="flex items-center gap-1">
                           {cfg.icon}
                           {cfg.label}
@@ -234,7 +235,7 @@ export default function UserOrdersPage() {
           {viewOrder && (
             <>
               <DialogHeader>
-                <DialogTitle>Order Details — {viewOrder.order_number ?? viewOrder.id.slice(0, 8)}</DialogTitle>
+                <DialogTitle>Order Details — {formatOrderRef(viewOrder.id, viewOrder.created_at)}</DialogTitle>
                 <DialogDescription>Placed on {new Date(viewOrder.created_at).toLocaleString()}</DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-4">

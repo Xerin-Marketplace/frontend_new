@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "XerinMarket — Buy & Sell with Confidence",
-  description: "The marketplace built for Africa. Secure payments, fast delivery, and trusted sellers.",
+  description: "Tanzania's Trusted Online Marketplace. Shop local, connect globally — secure payments, fast delivery, and trusted sellers.",
   icons: {
     icon: "/favicon-16x16.png",
     apple: "/apple-touch-icon.png",

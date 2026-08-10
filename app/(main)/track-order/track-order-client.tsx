@@ -6,13 +6,14 @@ import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 import Link from "next/link"
 import { api, type ApiError } from "@/lib/api"
+import { formatOrderRef } from "@/lib/store-types"
 
 const statusSteps = [
-  { key: "pending", label: "Order Placed", icon: ShoppingBag, description: "Your order has been received" },
-  { key: "paid", label: "Payment Confirmed", icon: CheckCircle2, description: "Payment has been verified" },
-  { key: "processing", label: "Processing", icon: Package, description: "Seller is preparing your order" },
-  { key: "shipped", label: "Shipped", icon: Truck, description: "Your order is on the way" },
-  { key: "delivered", label: "Delivered", icon: MapPin, description: "Order has been delivered" },
+  { key: "pending", label: "Order Confirmed", icon: ShoppingBag, description: "Your order has been received and confirmed" },
+  { key: "paid", label: "Payment Verified", icon: CheckCircle2, description: "Payment has been verified and seller notified" },
+  { key: "processing", label: "Seller Preparing", icon: Package, description: "The seller is preparing your order for dispatch" },
+  { key: "shipped", label: "Out for Delivery", icon: Truck, description: "Your order is on the way via Xerin Express" },
+  { key: "delivered", label: "Delivered", icon: MapPin, description: "Order has been delivered successfully" },
 ]
 
 const statusOrder = ["pending", "paid", "processing", "shipped", "delivered"]
@@ -126,7 +127,7 @@ export default function TrackOrderClient() {
             type="text"
             value={orderId}
             onChange={(e) => setOrderId(e.target.value)}
-            placeholder="Enter your Order ID (e.g. 550e8400-e29b-41d4-a716-446655440000)"
+            placeholder="Enter your Order Reference (e.g. XM-260811-00125)"
             className="w-full rounded-lg border bg-background py-3 pl-11 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
         </div>
@@ -167,8 +168,8 @@ export default function TrackOrderClient() {
           {/* Order Header */}
           <div className="flex items-center justify-between rounded-xl border bg-card p-5">
             <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Order ID</span>
-              <span className="font-mono text-sm font-medium">{order.id}</span>
+              <span className="text-xs text-muted-foreground">Order Reference</span>
+              <span className="font-mono text-sm font-medium">{formatOrderRef(order.id, order.created_at)}</span>
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="text-xs text-muted-foreground">Order Date</span>
@@ -260,8 +261,8 @@ export default function TrackOrderClient() {
                 )}
                 {order.shipping_carrier && (
                   <div className="flex flex-col gap-1">
-                    <span className="text-xs text-muted-foreground">Carrier</span>
-                    <span className="text-sm font-medium">{order.shipping_carrier}</span>
+                    <span className="text-xs text-muted-foreground">Delivery by</span>
+                    <span className="text-sm font-medium">{order.shipping_carrier === "Xerin Express" ? "Xerin Express" : order.shipping_carrier}</span>
                   </div>
                 )}
                 {order.estimated_delivery_from && (
@@ -362,9 +363,9 @@ export default function TrackOrderClient() {
         <div className="flex flex-col items-center gap-4 rounded-2xl border bg-muted/30 p-12 text-center">
           <Package className="size-12 text-muted-foreground" />
           <div className="flex flex-col gap-1">
-            <h3 className="font-semibold">Enter your Order ID to start tracking</h3>
+            <h3 className="font-semibold">Enter your Order Reference to start tracking</h3>
             <p className="text-sm text-muted-foreground">
-              You can find your Order ID in your order confirmation email or in your order history.
+              You can find your Order Reference in your order confirmation email or in your order history.
             </p>
           </div>
           <Link href="/dashboard/user" className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>

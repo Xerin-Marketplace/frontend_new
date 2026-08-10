@@ -60,3 +60,17 @@ export function getDisplayPrice(product: ApiProduct): { price: number; originalP
   }
   return { price: Number(product.price) }
 }
+
+export function formatOrderRef(id: string, createdAt?: string | null): string {
+  const date = createdAt ? new Date(createdAt) : new Date()
+  const yy = String(date.getFullYear()).slice(2)
+  const mm = String(date.getMonth() + 1).padStart(2, "0")
+  const dd = String(date.getDate()).padStart(2, "0")
+  const uuidNum = id.replace(/-/g, "")
+  let hash = 0
+  for (let i = 0; i < uuidNum.length; i++) {
+    hash = ((hash << 5) - hash + uuidNum.charCodeAt(i)) | 0
+  }
+  const seq = String(Math.abs(hash) % 100000).padStart(5, "0")
+  return `XM-${yy}${mm}${dd}-${seq}`
+}

@@ -70,7 +70,7 @@ export function Header() {
       {/* Top bar */}
       <div className="hidden bg-primary text-primary-foreground md:block">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-1.5 text-xs">
-          <p>Free shipping on orders over TSh 50,000</p>
+          <p>Tanzania's Trusted Online Marketplace — Shop Local. Connect Globally.</p>
           <div className="flex items-center gap-4">
             <Link href="/auth?tab=seller" className="hover:underline">
               Become a Seller
@@ -116,7 +116,7 @@ export function Header() {
                       Xerin<span className="text-primary">Market</span>
                     </p>
                     <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
-                      Premium Marketplace
+                      Shop Local. Connect Globally.
                     </p>
                   </div>
                 </div>

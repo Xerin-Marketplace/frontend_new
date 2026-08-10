@@ -263,10 +263,12 @@ export default function CartPage() {
                 </div>
               </div>
 
-              {subtotal < 50000 && (
+              {subtotal < 100000 && (
                 <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-2.5 text-xs text-primary">
                   <Truck className="size-4 shrink-0" />
-                  Add {formatPrice(50000 - subtotal)} more for free shipping
+                  {subtotal < 50000
+                    ? `Add ${formatPrice(50000 - subtotal)} more for free shipping (Dar es Salaam)`
+                    : `Add ${formatPrice(100000 - subtotal)} more for free shipping nationwide`}
                 </div>
               )}
 

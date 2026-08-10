@@ -48,6 +48,7 @@ import {
   Plus,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
+import { formatOrderRef } from "@/lib/store-types"
 import { StatsCardSkeleton, TableSkeleton, PageSkeleton } from "@/components/skeletons"
 import Link from "next/link"
 
@@ -388,7 +389,7 @@ export default function SellerOrdersPage() {
               ) : (
                 filtered.map((order) => (
                   <TableRow key={order.id}>
-                    <TableCell className="font-medium font-mono text-xs">#{order.order_id.slice(0, 8)}</TableCell>
+                    <TableCell className="font-medium font-mono text-xs">{formatOrderRef(order.order_id, order.created_at)}</TableCell>
                     <TableCell>
                       <div className="flex flex-col">
                         <span>{order.customer_name}</span>
@@ -449,7 +450,7 @@ export default function SellerOrdersPage() {
           {viewOrder && (
             <>
               <DialogHeader>
-                <DialogTitle>Order Details — #{viewOrder.order_id.slice(0, 8)}</DialogTitle>
+                <DialogTitle>Order Details — {formatOrderRef(viewOrder.order_id, viewOrder.created_at)}</DialogTitle>
                 <DialogDescription>
                   Placed on {new Date(viewOrder.created_at).toLocaleString()}
                 </DialogDescription>
@@ -564,7 +565,7 @@ function DispatchForm({
   order: Order
   onSubmit: (data: { carrier: string; tracking: string }) => void
 }) {
-  const orderNumber = `#${order.order_id.slice(0, 8)}`
+  const orderNumber = formatOrderRef(order.order_id, order.created_at)
   const [carrier, setCarrier] = React.useState("")
   const [tracking, setTracking] = React.useState("")
 

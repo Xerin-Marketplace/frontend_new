@@ -29,6 +29,7 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<ApiCategory[]>([])
   const [brands, setBrands] = useState<ApiBrand[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
 
   useEffect(() => {
@@ -41,9 +42,12 @@ export default function ProductsPage() {
         setProducts(p)
         setCategories(c)
         setBrands(b)
+        setError(null)
       })
       .catch((err) => {
-        toast.add({ title: "Failed to load products", description: getApiError(err), type: "error" })
+        const msg = getApiError(err)
+        setError(msg)
+        toast.add({ title: "Failed to load products", description: msg, type: "error" })
       })
       .finally(() => setLoading(false))
   }, [])
@@ -317,6 +321,12 @@ export default function ProductsPage() {
                   <Skeleton className="h-8 w-full" />
                 </div>
               ))}
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+              <p className="text-lg font-medium">Failed to load products</p>
+              <p className="text-sm text-muted-foreground">{error}</p>
+              <Button variant="outline" onClick={() => window.location.reload()}>Try Again</Button>
             </div>
           ) : sorted.length > 0 ? (
             <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-4", view === "grid" ? "lg:grid-cols-3" : "lg:grid-cols-2")}>

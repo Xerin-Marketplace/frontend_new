@@ -52,8 +52,8 @@ export function Footer() {
               </span>
             </Link>
             <p className="text-sm text-muted-foreground">
-              The marketplace built for Africa. Buy and sell with confidence,
-              secure payments, and fast delivery.
+              Tanzania's Trusted Online Marketplace. Shop local, connect globally —
+              buy and sell with confidence, secure payments, and fast delivery.
             </p>
             <div className="flex items-center gap-2">
               <Link
@@ -147,14 +147,19 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/terms" className="hover:text-primary">
-                  Terms of Service
-                </Link>
+                <a href="tel:+255222000000" className="hover:text-primary">
+                  +255 22 200 0000
+                </a>
               </li>
               <li>
-                <Link href="/privacy" className="hover:text-primary">
-                  Privacy Policy
-                </Link>
+                <a href="https://wa.me/255222000000" target="_blank" rel="noopener noreferrer" className="hover:text-primary">
+                  WhatsApp Support
+                </a>
+              </li>
+              <li>
+                <a href="mailto:support@xerin.co.tz" className="hover:text-primary">
+                  support@xerin.co.tz
+                </a>
               </li>
               <li>
                 <Link href="/returns" className="hover:text-primary">

@@ -8,7 +8,7 @@ import {
   X,
   Package,
 } from "lucide-react"
-import { buttonVariants } from "@/components/ui/button"
+import { buttonVariants, Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ProductCard } from "@/components/product-card"
 import { cn } from "@/lib/utils"
@@ -28,6 +28,7 @@ export default function Home() {
   const [products, setProducts] = useState<ApiProduct[]>([])
   const [categories, setCategories] = useState<ApiCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -37,9 +38,12 @@ export default function Home() {
       .then(([p, c]) => {
         setProducts(p)
         setCategories(c)
+        setError(null)
       })
       .catch((err) => {
-        toast.add({ title: "Failed to load data", description: getApiError(err), type: "error" })
+        const msg = getApiError(err)
+        setError(msg)
+        toast.add({ title: "Failed to load data", description: msg, type: "error" })
       })
       .finally(() => setLoading(false))
   }, [])
@@ -214,6 +218,12 @@ export default function Home() {
                   <Skeleton className="h-8 w-full" />
                 </div>
               ))}
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+              <p className="text-lg font-medium">Failed to load products</p>
+              <p className="text-sm text-muted-foreground">{error}</p>
+              <Button variant="outline" onClick={() => window.location.reload()}>Try Again</Button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">

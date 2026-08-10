@@ -11,6 +11,7 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { formatOrderRef } from "@/lib/store-types"
 
 export default function CheckoutSuccessPage() {
   const searchParams = useSearchParams()
@@ -47,8 +48,8 @@ export default function CheckoutSuccessPage() {
                   <Package className="size-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Order ID</p>
-                  <p className="text-sm font-semibold">{orderId.slice(0, 8)}...</p>
+                  <p className="text-xs text-muted-foreground">Order Reference</p>
+                  <p className="text-sm font-semibold">{formatOrderRef(orderId)}</p>
                 </div>
               </div>
             </div>

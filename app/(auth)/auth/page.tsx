@@ -2,7 +2,7 @@
 
 import { AuthForm } from "@/components/auth-form"
 import { Toaster } from "@/components/ui/toast"
-import { ShieldCheck, Truck, TrendingUp, Wallet, Users, Star } from "lucide-react"
+import { ShieldCheck, Truck, TrendingUp, Wallet, Users } from "lucide-react"
 
 export default function AuthPage() {
   return (
@@ -63,11 +63,11 @@ export default function AuthPage() {
         <div className="relative flex flex-col gap-8 text-white">
           <div className="flex flex-col gap-3">
             <h2 className="text-3xl font-bold leading-tight tracking-tight">
-              The marketplace built for Africa
+              Tanzania's Trusted Online Marketplace
             </h2>
             <p className="max-w-md text-lg text-zinc-300">
-              Buy and sell products with confidence. Secure payments, fast
-              delivery, and trusted sellers — all in one platform.
+              Shop local, connect globally. Buy and sell with confidence —
+              secure payments, fast delivery, and trusted sellers.
             </p>
           </div>
 
@@ -79,7 +79,7 @@ export default function AuthPage() {
               <div>
                 <p className="font-medium">Secure Payments</p>
                 <p className="text-sm text-zinc-400">
-                  Your transactions are protected with escrow
+                  Funds held securely until you confirm delivery
                 </p>
               </div>
             </div>
@@ -122,16 +122,19 @@ export default function AuthPage() {
         <div className="relative flex flex-col gap-4">
           <div className="flex items-center gap-6 text-sm text-zinc-400">
             <div className="flex items-center gap-1.5">
-              <Users className="size-4" />
-              <span>10k+ Sellers</span>
+              <ShieldCheck className="size-4" />
+              <span>Secure Payments</span>
             </div>
             <span className="size-1 rounded-full bg-zinc-600" />
             <div className="flex items-center gap-1.5">
-              <Star className="size-4 fill-yellow-400 text-yellow-400" />
-              <span>4.8 Rating</span>
+              <Truck className="size-4" />
+              <span>Fast Nationwide Delivery</span>
             </div>
             <span className="size-1 rounded-full bg-zinc-600" />
-            <span>1M+ Orders</span>
+            <div className="flex items-center gap-1.5">
+              <Users className="size-4" />
+              <span>Trusted Sellers</span>
+            </div>
           </div>
         </div>
       </div>

@@ -7,6 +7,13 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import {
   ShoppingCart,
   Search,
   Menu,
@@ -14,7 +21,6 @@ import {
   User,
   Package,
   Home,
-  ChevronRight,
   X,
   TrendingUp,
   Tag,
@@ -25,11 +31,10 @@ import {
   LayoutDashboard,
   Store,
 } from "lucide-react"
-import { categories as mockCategories } from "@/lib/mock-data"
-import * as Icons from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { useCart } from "@/lib/cart-context"
+import { useWishlist } from "@/lib/wishlist-context"
 import { ModeToggle } from "@/components/mode-toggle"
 
 export function Header() {
@@ -40,6 +45,7 @@ export function Header() {
   const router = useRouter()
   const { user, isAuthenticated, logout } = useAuth()
   const { count: cartCount } = useCart()
+  const { count: wishlistCount } = useWishlist()
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -82,12 +88,136 @@ export function Header() {
       {/* Main header */}
       <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5 md:gap-6 md:px-4 md:py-3">
         {/* Mobile menu button */}
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-muted md:hidden"
-        >
-          <Menu className="size-5" />
-        </button>
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger
+            render={
+              <button
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-muted md:hidden"
+              >
+                <Menu className="size-5" />
+              </button>
+            }
+          />
+          <SheetContent side="left" className="p-0 border-none w-[85%] max-w-[320px]">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Navigation Menu</SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-col h-full bg-background">
+              {/* Drawer header - Plain & Clean */}
+              <div className="px-6 pb-6 pt-12 border-b">
+                <div className="flex items-center gap-3">
+                  <img
+                    src="/apple-touch-icon.png"
+                    alt="XerinMarket"
+                    className="size-10 rounded-lg object-cover"
+                  />
+                  <div>
+                    <p className="text-lg font-bold tracking-tight">
+                      Xerin<span className="text-primary">Market</span>
+                    </p>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+                      Premium Marketplace
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Drawer content */}
+              <div className="flex-1 overflow-y-auto px-4 py-6">
+                {/* Quick links */}
+                <p className="px-2 pb-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                  Main Menu
+                </p>
+                <div className="space-y-1">
+                  {[
+                    { href: "/", label: "Home", icon: Home },
+                    { href: "/products", label: "All Products", icon: Package },
+                    { href: "/deals", label: "Hot Deals", icon: Tag },
+                    { href: "/track-order", label: "Track Order", icon: Truck },
+                    { href: "/help", label: "Help Center", icon: Headphones },
+                  ].map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-4 rounded-lg px-3 py-3 text-sm font-medium transition-all hover:bg-muted active:bg-muted"
+                    >
+                      <item.icon className="size-5 text-muted-foreground" strokeWidth={1.5} />
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+
+                <div className="my-6 h-px bg-border/60 mx-2" />
+
+                {/* Account */}
+                <p className="px-2 pb-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                  Personal Space
+                </p>
+                <div className="space-y-1">
+                  {isAuthenticated && user ? (
+                    <>
+                      <Link
+                        href="/dashboard/user"
+                        onClick={() => setMobileOpen(false)}
+                        className="flex items-center gap-4 rounded-lg px-3 py-3 text-sm font-medium transition-all hover:bg-muted active:bg-muted"
+                      >
+                        <User className="size-5 text-muted-foreground" strokeWidth={1.5} />
+                        My Dashboard
+                      </Link>
+                      {user.is_seller && (
+                        <Link
+                          href="/dashboard/seller"
+                          onClick={() => setMobileOpen(false)}
+                          className="flex items-center gap-4 rounded-lg px-3 py-3 text-sm font-medium transition-all hover:bg-muted active:bg-muted"
+                        >
+                          <Store className="size-5 text-muted-foreground" strokeWidth={1.5} />
+                          Seller Dashboard
+                        </Link>
+                      )}
+                      {(user.account_type === "admin" || user.account_type === "super_admin") && (
+                        <Link
+                          href="/dashboard/admin"
+                          onClick={() => setMobileOpen(false)}
+                          className="flex items-center gap-4 rounded-lg px-3 py-3 text-sm font-medium transition-all hover:bg-muted active:bg-muted"
+                        >
+                          <LayoutDashboard className="size-5 text-muted-foreground" strokeWidth={1.5} />
+                          Admin Panel
+                        </Link>
+                      )}
+                      <button
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-4 rounded-lg px-3 py-3 text-sm font-medium text-red-500 transition-all hover:bg-red-50 active:bg-red-50"
+                      >
+                        <LogOut className="size-5" strokeWidth={1.5} />
+                        Sign Out
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href="/auth"
+                        onClick={() => setMobileOpen(false)}
+                        className="flex items-center gap-4 rounded-lg px-3 py-3 text-sm font-medium transition-all hover:bg-muted active:bg-muted"
+                      >
+                        <User className="size-5 text-muted-foreground" strokeWidth={1.5} />
+                        Sign In / Register
+                      </Link>
+                      <Link
+                        href="/auth?tab=seller"
+                        onClick={() => setMobileOpen(false)}
+                        className="flex items-center gap-4 rounded-lg px-3 py-3 text-sm font-medium transition-all hover:bg-muted active:bg-muted"
+                      >
+                        <TrendingUp className="size-5 text-muted-foreground" strokeWidth={1.5} />
+                        Become a Seller
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
 
         {/* Logo */}
         <Link href="/" className="flex shrink-0 items-center gap-2">
@@ -133,9 +263,11 @@ export function Header() {
             className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "relative shrink-0")}
           >
             <Heart className="size-5" />
-            <Badge className="absolute -right-0.5 -top-0.5 size-4 justify-center p-0 text-[10px]">
-              3
-            </Badge>
+            {wishlistCount > 0 && (
+              <Badge className="absolute -right-0.5 -top-0.5 size-4 justify-center p-0 text-[10px]">
+                {wishlistCount}
+              </Badge>
+            )}
           </Link>
           <Link
             href="/cart"
@@ -246,15 +378,6 @@ export function Header() {
           >
             <Menu className="size-4" /> All Categories
           </Link>
-          {mockCategories.slice(0, 7).map((cat) => (
-            <Link
-              key={cat.id}
-              href={`/products?category=${cat.id}`}
-              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              {cat.name}
-            </Link>
-          ))}
           <Link
             href="/deals"
             className="ml-auto rounded-md bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/20"
@@ -264,180 +387,6 @@ export function Header() {
         </div>
       </nav>
 
-      {/* Mobile drawer overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-[60] md:hidden">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={() => setMobileOpen(false)}
-          />
-          <div
-            className="absolute left-0 top-0 h-full w-[88%] max-w-[360px] overflow-y-auto bg-background shadow-2xl animate-in slide-in-from-left duration-300"
-            style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Drawer header with gradient */}
-            <div className="relative bg-gradient-to-br from-primary to-primary/80 px-5 pb-5 pt-6 text-primary-foreground">
-              <button
-                onClick={() => setMobileOpen(false)}
-                className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20"
-              >
-                <X className="size-5" />
-              </button>
-              <div className="flex items-center gap-3">
-                <img
-                  src="/apple-touch-icon.png"
-                  alt="XerinMarket"
-                  className="size-12 rounded-xl object-cover ring-2 ring-white/20"
-                />
-                <div>
-                  <p className="text-xl font-bold leading-tight">
-                    XerinMarket
-                  </p>
-                  <p className="text-xs text-primary-foreground/70">
-                    Buy & Sell with confidence
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Drawer content */}
-            <div className="p-3">
-              {/* Quick links */}
-              <p className="px-3 pb-2 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Menu
-              </p>
-              {[
-                { href: "/", label: "Home", icon: Home },
-                { href: "/products", label: "All Products", icon: Package },
-                { href: "/deals", label: "Hot Deals", icon: Tag },
-                { href: "/track-order", label: "Track Order", icon: Truck },
-                { href: "/help", label: "Help Center", icon: Headphones },
-              ].map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
-                >
-                  <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <item.icon className="size-4.5" />
-                  </div>
-                  {item.label}
-                </Link>
-              ))}
-
-              {/* Divider */}
-              <div className="my-3 h-px bg-border" />
-
-              {/* Categories */}
-              <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Categories
-              </p>
-              {mockCategories.map((cat) => {
-                const Icon = (Icons as any)[cat.icon] || Icons.Package
-                return (
-                  <Link
-                    key={cat.id}
-                    href={`/products?category=${cat.id}`}
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted active:scale-[0.98]"
-                  >
-                    <span className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-foreground">
-                        <Icon className="size-4" />
-                      </div>
-                      {cat.name}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{cat.productCount}</span>
-                      <ChevronRight className="size-4 text-muted-foreground" />
-                    </div>
-                  </Link>
-                )
-              })}
-
-              {/* Divider */}
-              <div className="my-3 h-px bg-border" />
-
-              {/* Account */}
-              <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Account
-              </p>
-              {isAuthenticated && user ? (
-                <>
-                  <Link
-                    href="/dashboard/user"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
-                  >
-                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <User className="size-4.5" />
-                    </div>
-                    My Dashboard
-                  </Link>
-                  {user.is_seller && (
-                    <Link
-                      href="/dashboard/seller"
-                      onClick={() => setMobileOpen(false)}
-                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
-                    >
-                      <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <Store className="size-4.5" />
-                      </div>
-                      Seller Dashboard
-                    </Link>
-                  )}
-                  {(user.account_type === "admin" || user.account_type === "super_admin") && (
-                    <Link
-                      href="/dashboard/admin"
-                      onClick={() => setMobileOpen(false)}
-                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
-                    >
-                      <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <LayoutDashboard className="size-4.5" />
-                      </div>
-                      Admin Panel
-                    </Link>
-                  )}
-                  <button
-                    onClick={handleLogout}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-red-500 transition-colors hover:bg-red-50 active:scale-[0.98]"
-                  >
-                    <div className="flex size-9 items-center justify-center rounded-lg bg-red-50 text-red-500">
-                      <LogOut className="size-4.5" />
-                    </div>
-                    Sign Out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/auth"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
-                  >
-                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <User className="size-4.5" />
-                    </div>
-                    Sign In / Register
-                  </Link>
-                  <Link
-                    href="/auth?tab=seller"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted active:scale-[0.98]"
-                  >
-                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <TrendingUp className="size-4.5" />
-                    </div>
-                    Become a Seller
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Mobile search popup overlay */}
       {searchOpen && (
@@ -489,27 +438,6 @@ export function Header() {
                 )}
               </div>
 
-              <p className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Trending Categories
-              </p>
-              <div className="flex flex-col gap-1">
-                {mockCategories.slice(0, 4).map((cat) => {
-                  const Icon = (Icons as any)[cat.icon] || Icons.Package
-                  return (
-                    <Link
-                      key={cat.id}
-                      href={`/products?category=${cat.id}`}
-                      onClick={() => setSearchOpen(false)}
-                      className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-muted"
-                    >
-                      <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <Icon className="size-4" />
-                      </div>
-                      {cat.name}
-                    </Link>
-                  )
-                })}
-              </div>
             </div>
           </div>
         </div>

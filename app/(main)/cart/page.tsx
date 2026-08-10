@@ -188,7 +188,7 @@ export default function CartPage() {
                       </div>
 
                       <div className="flex flex-col items-end">
-                        <span className="text-sm font-bold text-primary">{formatPrice(Number(item.total_price))}</span>
+                        <span className="text-sm font-bold text-primary">{formatPrice(Number(item.unit_price) * item.quantity)}</span>
                         <span className="text-xs text-muted-foreground">{formatPrice(Number(item.unit_price))} each</span>
                       </div>
                     </div>

@@ -42,7 +42,9 @@ export type ApiBrand = {
 }
 
 export function formatPrice(price: number): string {
-  return `TSh ${Number(price).toLocaleString()}`
+  const n = Number(price)
+  if (isNaN(n) || !isFinite(n)) return "TSh 0"
+  return `TSh ${n.toLocaleString()}`
 }
 
 export function getPrimaryImage(product: ApiProduct): string | null {

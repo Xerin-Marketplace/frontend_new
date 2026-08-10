@@ -11,15 +11,14 @@ export type CartItem = {
   quantity: number
   product: ApiProduct
   unit_price: number
-  total_price: number
 }
 
 export type CartResponse = {
   id: string
+  user_id: string
   items: CartItem[]
   subtotal: number
-  discount: number
-  shipping_cost: number
+  discount_amount: number
   total: number
   coupon_code: string | null
 }
@@ -135,8 +134,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         items: serverCart.items,
         count: serverCart.items.reduce((s, i) => s + i.quantity, 0),
         subtotal: Number(serverCart.subtotal),
-        discount: Number(serverCart.discount ?? 0),
-        shippingCost: Number(serverCart.shipping_cost ?? 0),
+        discount: Number(serverCart.discount_amount ?? 0),
+        shippingCost: 0,
         total: Number(serverCart.total),
         couponCode: serverCart.coupon_code,
       }
@@ -151,10 +150,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         quantity: gi.quantity,
         product: gi.product,
         unit_price: price,
-        total_price: price * gi.quantity,
       }
     })
-    const subtotal = items.reduce((s, i) => s + i.total_price, 0)
+    const subtotal = items.reduce((s, i) => s + i.unit_price * i.quantity, 0)
     return {
       items,
       count: items.reduce((s, i) => s + i.quantity, 0),
@@ -213,7 +211,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const applyCoupon = React.useCallback(async (code: string) => {
     if (isAuthenticated) {
-      await api.post("/cart/apply-coupon", { coupon_code: code })
+      await api.post("/cart/apply-coupon", { code })
       await fetchServerCart()
     }
   }, [isAuthenticated, fetchServerCart])

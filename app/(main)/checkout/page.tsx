@@ -16,15 +16,20 @@ import {
   Info,
   User,
   Mail,
-  Phone,
   ShieldCheck,
   Package,
+  Plus,
+  Trash2,
+  Home,
+  Building2,
+  Star,
   type LucideIcon,
 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { api, type ApiError } from "@/lib/api"
@@ -59,12 +64,25 @@ function getApiError(err: unknown): string {
 
 type Address = {
   id: string
+  label: string | null
+  recipient_name: string | null
+  recipient_phone: string | null
   country: string
   region: string
+  district: string | null
+  ward: string | null
   city: string
   street: string
+  landmark: string | null
   postal_code: string | null
   is_default: boolean
+}
+
+type PaginatedAddressResponse = {
+  total: number
+  page: number
+  page_size: number
+  results: Address[]
 }
 
 type OrderResponse = {
@@ -87,6 +105,17 @@ type PaymentResponse = {
     checkout_url?: string
     [key: string]: unknown
   }
+}
+
+type ShippingQuoteOption = {
+  rate_id: string
+  method_id: string
+  method_name: string
+  carrier_name: string | null
+  amount: number
+  currency: string
+  min_delivery_days: number
+  max_delivery_days: number
 }
 
 const MNO_PROVIDERS = [
@@ -152,20 +181,41 @@ export default function CheckoutPage() {
   const [shipEmail, setShipEmail] = useState("")
   const [shipCountry, setShipCountry] = useState("Tanzania")
   const [shipRegion, setShipRegion] = useState("")
+  const [shipDistrict, setShipDistrict] = useState("")
+  const [shipWard, setShipWard] = useState("")
   const [shipCity, setShipCity] = useState("")
   const [shipStreet, setShipStreet] = useState("")
+  const [shipLandmark, setShipLandmark] = useState("")
   const [shipPostalCode, setShipPostalCode] = useState("")
   const [shipNotes, setShipNotes] = useState("")
 
   // Saved address selection (for authenticated users)
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
   const [useNewAddress, setUseNewAddress] = useState(false)
+  const [savingAddress, setSavingAddress] = useState(false)
   // New address form for authenticated users
+  const [newAddrLabel, setNewAddrLabel] = useState("")
+  const [newAddrRecipientName, setNewAddrRecipientName] = useState("")
+  const [newAddrRecipientPhone, setNewAddrRecipientPhone] = useState("")
   const [newAddrCountry, setNewAddrCountry] = useState("Tanzania")
   const [newAddrRegion, setNewAddrRegion] = useState("")
+  const [newAddrDistrict, setNewAddrDistrict] = useState("")
+  const [newAddrWard, setNewAddrWard] = useState("")
   const [newAddrCity, setNewAddrCity] = useState("")
   const [newAddrStreet, setNewAddrStreet] = useState("")
+  const [newAddrLandmark, setNewAddrLandmark] = useState("")
   const [newAddrPostalCode, setNewAddrPostalCode] = useState("")
+  const [newAddrIsDefault, setNewAddrIsDefault] = useState(false)
+
+  // Shipping quote state
+  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteOption[]>([])
+  const [selectedRateId, setSelectedRateId] = useState<string | null>(null)
+  const [loadingQuotes, setLoadingQuotes] = useState(false)
+
+  // Compute actual shipping cost from selected quote
+  const selectedQuote = shippingQuotes.find((q) => q.rate_id === selectedRateId)
+  const computedShippingCost = selectedQuote ? Number(selectedQuote.amount) : 0
+  const computedTotal = subtotal - discount + computedShippingCost
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null)
@@ -185,16 +235,16 @@ export default function CheckoutPage() {
           const res = await api.get<PaymentResponse>(`/payments/${activePaymentId}`)
           if (res.status === "completed") {
             setCheckingStatus(false)
-            toast.add({ title: "Malipo yamepokelewa!", type: "success" })
+            toast.add({ title: "Payment received!", type: "success" })
             router.push(`/checkout/success?order_id=${res.order_id}&payment_id=${res.id}`)
           } else if (res.status === "failed") {
             setCheckingStatus(false)
-            toast.add({ title: "Malipo yamekataliwa", type: "error" })
+            toast.add({ title: "Payment declined", type: "error" })
           }
           setStatusAttempts((p) => p + 1)
           if (statusAttempts > 30) {
             setCheckingStatus(false)
-            toast.add({ title: "Uhakiki umechukua muda mrefu", description: "Tafadhali kagua historia yako baadae.", type: "warning" })
+            toast.add({ title: "Verification is taking too long", description: "Please check your order history later.", type: "warning" })
           }
         } catch {
           // ignore
@@ -206,14 +256,106 @@ export default function CheckoutPage() {
 
   const fetchAddresses = useCallback(async () => {
     try {
-      const addrRes = await api.get<Address[]>("/addresses").catch(() => [] as Address[])
-      setAddresses(addrRes)
-      const defaultAddr = addrRes.find((a) => a.is_default) ?? addrRes[0]
+      const res = await api.get<PaginatedAddressResponse>("/addresses").catch(() => null)
+      const addrList = res?.results ?? []
+      setAddresses(addrList)
+      const defaultAddr = addrList.find((a) => a.is_default) ?? addrList[0]
       if (defaultAddr) setSelectedAddressId(defaultAddr.id)
     } catch {
       // ignore
     }
   }, [])
+
+  const handleDeleteAddress = async (id: string) => {
+    try {
+      await api.delete(`/addresses/${id}`)
+      setAddresses((prev) => prev.filter((a) => a.id !== id))
+      if (selectedAddressId === id) {
+        const remaining = addresses.filter((a) => a.id !== id)
+        setSelectedAddressId(remaining.find((a) => a.is_default)?.id ?? remaining[0]?.id ?? null)
+      }
+      toast.add({ title: "Address deleted", type: "success" })
+    } catch (err) {
+      toast.add({ title: "Failed to delete address", description: getApiError(err), type: "error" })
+    }
+  }
+
+  const handleSetDefault = async (id: string) => {
+    try {
+      await api.post(`/addresses/${id}/default`)
+      setAddresses((prev) => prev.map((a) => ({ ...a, is_default: a.id === id })))
+      toast.add({ title: "Default address set", type: "success" })
+    } catch (err) {
+      toast.add({ title: "Failed to set default address", description: getApiError(err), type: "error" })
+    }
+  }
+
+  const handleSaveNewAddress = async () => {
+    if (!newAddrRegion.trim() || !newAddrCity.trim() || !newAddrStreet.trim()) {
+      toast.add({ title: "Please fill in all required fields", type: "warning" })
+      return
+    }
+    setSavingAddress(true)
+    try {
+      const addr = await api.post<Address>("/addresses", {
+        label: newAddrLabel.trim() || null,
+        recipient_name: newAddrRecipientName.trim() || null,
+        recipient_phone: newAddrRecipientPhone.trim() || null,
+        country: newAddrCountry,
+        region: newAddrRegion,
+        district: newAddrDistrict.trim() || null,
+        ward: newAddrWard.trim() || null,
+        city: newAddrCity,
+        street: newAddrStreet,
+        landmark: newAddrLandmark.trim() || null,
+        postal_code: newAddrPostalCode.trim() || null,
+        is_default: newAddrIsDefault || addresses.length === 0,
+      })
+      setAddresses((prev) => [...prev, addr])
+      setSelectedAddressId(addr.id)
+      setUseNewAddress(false)
+      setNewAddrLabel("")
+      setNewAddrRecipientName("")
+      setNewAddrRecipientPhone("")
+      setNewAddrRegion("")
+      setNewAddrDistrict("")
+      setNewAddrWard("")
+      setNewAddrCity("")
+      setNewAddrStreet("")
+      setNewAddrLandmark("")
+      setNewAddrPostalCode("")
+      setNewAddrIsDefault(false)
+      toast.add({ title: "New address saved", type: "success" })
+      await fetchShippingQuotes(addr.id)
+    } catch (err) {
+      toast.add({ title: "Failed to save address", description: getApiError(err), type: "error" })
+    } finally {
+      setSavingAddress(false)
+    }
+  }
+
+  const fetchShippingQuotes = useCallback(async (addressId: string) => {
+    setLoadingQuotes(true)
+    try {
+      const quotes = await api.post<ShippingQuoteOption[]>("/shipping/quote", {
+        address_id: addressId,
+        subtotal: subtotal,
+        weight_kg: 0,
+      })
+      setShippingQuotes(quotes)
+      if (quotes.length > 0) {
+        setSelectedRateId(quotes[0].rate_id)
+      } else {
+        setSelectedRateId(null)
+      }
+    } catch (err) {
+      console.error("Shipping quote error:", err)
+      setShippingQuotes([])
+      setSelectedRateId(null)
+    } finally {
+      setLoadingQuotes(false)
+    }
+  }, [subtotal])
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -222,6 +364,17 @@ export default function CheckoutPage() {
       setLoading(false)
     }
   }, [isAuthenticated, fetchAddresses])
+
+  // Auto-fetch shipping quotes when selected address changes
+  useEffect(() => {
+    if (isAuthenticated && selectedAddressId && !useNewAddress) {
+      setSelectedRateId(null)
+      fetchShippingQuotes(selectedAddressId)
+    } else {
+      setShippingQuotes([])
+      setSelectedRateId(null)
+    }
+  }, [isAuthenticated, selectedAddressId, useNewAddress, fetchShippingQuotes])
 
   // Pre-fill shipping from user data
   useEffect(() => {
@@ -293,7 +446,13 @@ export default function CheckoutPage() {
   }
 
   const validateShipping = (): boolean => {
-    if (isAuthenticated && selectedAddressId && !useNewAddress) return true
+    if (isAuthenticated && selectedAddressId && !useNewAddress) {
+      if (!selectedRateId) {
+        toast.add({ title: "Please select a shipping method", type: "warning" })
+        return false
+      }
+      return true
+    }
 
     const required = isGuest || useNewAddress
     if (!required) return true
@@ -303,7 +462,11 @@ export default function CheckoutPage() {
       : [newAddrRegion, newAddrCity, newAddrStreet]
 
     if (fields.some((f) => !f.trim())) {
-      toast.add({ title: "Missing information", description: "Please fill in all required shipping fields.", type: "warning" })
+      toast.add({ title: "Information incomplete", description: "Please fill in all required fields.", type: "warning" })
+      return false
+    }
+    if (useNewAddress && !selectedRateId) {
+      toast.add({ title: "Please select a shipping method", type: "warning" })
       return false
     }
     return true
@@ -336,29 +499,56 @@ export default function CheckoutPage() {
     setPlacing(true)
     try {
       let addressId = selectedAddressId
+      let rateId = selectedRateId
 
       // For guests or new address — create address first
       if (isGuest || useNewAddress) {
         const addrData = isGuest
           ? {
+              recipient_name: `${shipFirstName} ${shipLastName}`.trim() || null,
+              recipient_phone: shipPhone || null,
               country: shipCountry,
               region: shipRegion,
+              district: shipDistrict.trim() || null,
+              ward: shipWard.trim() || null,
               city: shipCity,
               street: shipStreet,
+              landmark: shipLandmark.trim() || null,
               postal_code: shipPostalCode || null,
               is_default: true,
             }
           : {
+              label: newAddrLabel.trim() || null,
+              recipient_name: newAddrRecipientName.trim() || null,
+              recipient_phone: newAddrRecipientPhone.trim() || null,
               country: newAddrCountry,
               region: newAddrRegion,
+              district: newAddrDistrict.trim() || null,
+              ward: newAddrWard.trim() || null,
               city: newAddrCity,
               street: newAddrStreet,
+              landmark: newAddrLandmark.trim() || null,
               postal_code: newAddrPostalCode || null,
-              is_default: addresses.length === 0,
+              is_default: newAddrIsDefault || addresses.length === 0,
             }
 
         const addr = await api.post<Address>("/addresses", addrData)
         addressId = addr.id
+
+        // Fetch shipping quotes for the new address
+        const quotes = await api.post<ShippingQuoteOption[]>("/shipping/quote", {
+          address_id: addr.id,
+          subtotal: subtotal,
+          weight_kg: 0,
+        })
+
+        if (quotes.length === 0) {
+          toast.add({ title: "No shipping options available for this address", type: "error" })
+          setPlacing(false)
+          return
+        }
+
+        rateId = quotes[0].rate_id
       }
 
       if (!addressId) {
@@ -367,9 +557,16 @@ export default function CheckoutPage() {
         return
       }
 
+      if (!rateId) {
+        toast.add({ title: "Please select a shipping method", type: "warning" })
+        setPlacing(false)
+        return
+      }
+
       // Step 1: Create the order
       const order = await api.post<OrderResponse>("/orders", {
         shipping_address_id: addressId,
+        shipping_rate_id: rateId,
         notes: (isGuest ? shipNotes : notes).trim() || undefined,
       })
 
@@ -391,7 +588,7 @@ export default function CheckoutPage() {
         setActivePaymentId(payment.id)
         setCheckingStatus(true)
         setStatusAttempts(0)
-        toast.add({ title: "Ombi la Malipo Limetumwa", description: "Tafadhali kagua simu yako kuweka namba ya siri.", type: "info" })
+        toast.add({ title: "Payment Request Sent", description: "Please check your phone to enter your PIN.", type: "info" })
       } else if (paymentMethod === "card") {
         const checkoutUrl = payment.provider_response?.checkout_url
         if (checkoutUrl) {
@@ -507,39 +704,35 @@ export default function CheckoutPage() {
           {/* =================== STEP 0: SHIPPING =================== */}
           {step === 0 && (
             <div className="flex flex-col gap-6 animate-fade-in-up">
-              {/* Order Items Summary (collapsible) */}
+              {/* Order Items Summary */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <ShoppingBag className="size-4 text-primary" />
-                    Order Items ({items.length})
+                    Your Items ({items.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-3">
+                <CardContent className="flex flex-col gap-2">
                   {items.map((item) => {
                     const product = item.product
                     const image = product?.images?.find((img) => img.is_primary)?.image_url ?? product?.images?.[0]?.image_url
                     return (
-                      <div key={item.id} className="flex gap-3 rounded-lg border p-3">
-                        <div className="relative size-14 shrink-0 overflow-hidden rounded-lg border bg-muted">
+                      <Item key={item.id} variant="outline">
+                        <ItemMedia variant="image" className="size-14">
                           {image ? (
                             <img src={image} alt={product?.name ?? "Product"} className="h-full w-full object-cover" />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                              <ShoppingBag className="size-5" />
-                            </div>
+                            <ShoppingBag className="size-5 text-muted-foreground" />
                           )}
-                        </div>
-                        <div className="flex flex-1 flex-col justify-between">
+                        </ItemMedia>
+                        <ItemContent>
                           <Link href={`/products/${item.product_id}`} className="line-clamp-1 text-sm font-medium hover:text-primary">
                             {product?.name ?? `Product ${item.product_id.slice(0, 8)}`}
                           </Link>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground">Qty: {item.quantity}</span>
-                            <span className="text-sm font-bold text-primary">{formatPrice(Number(item.total_price))}</span>
-                          </div>
-                        </div>
-                      </div>
+                          <ItemDescription>Qty: {item.quantity}</ItemDescription>
+                        </ItemContent>
+                        <span className="text-sm font-medium text-primary">{formatPrice(Number(item.unit_price) * item.quantity)}</span>
+                      </Item>
                     )
                   })}
                 </CardContent>
@@ -558,186 +751,369 @@ export default function CheckoutPage() {
                   {/* Saved addresses for authenticated users */}
                   {isAuthenticated && addresses.length > 0 && !useNewAddress && (
                     <>
-                      {addresses.map((addr) => {
-                        const isSelected = selectedAddressId === addr.id
-                        return (
-                          <button
-                            key={addr.id}
-                            onClick={() => setSelectedAddressId(addr.id)}
-                            className={cn(
-                              "flex items-start gap-3 rounded-lg border p-4 text-left transition-all",
-                              isSelected
-                                ? "border-primary bg-primary/5 ring-1 ring-primary"
-                                : "border-border hover:border-primary/40"
-                            )}
-                          >
-                            <div className={cn(
-                              "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                              isSelected ? "border-primary bg-primary" : "border-muted-foreground/30"
-                            )}>
-                              {isSelected && <CheckCircle2 className="size-3 text-primary-foreground" />}
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">{addr.street}</span>
-                                {addr.is_default && (
-                                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Default</span>
+                      <ItemGroup>
+                        {addresses.map((addr) => {
+                          const isSelected = selectedAddressId === addr.id
+                          return (
+                            <div
+                              key={addr.id}
+                              onClick={() => setSelectedAddressId(addr.id)}
+                              className={cn(
+                                "flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors",
+                                isSelected
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                                  : "border-border hover:bg-muted/50"
+                              )}
+                            >
+                              <div className={cn(
+                                "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+                                isSelected ? "border-primary bg-primary" : "border-muted-foreground/30"
+                              )}>
+                                {isSelected && <CheckCircle2 className="size-3 text-primary-foreground" />}
+                              </div>
+                              <div className="flex-1 space-y-1.5">
+                                {/* Label + Default badge */}
+                                <div className="flex items-center gap-2">
+                                  {addr.label ? (
+                                    <span className="flex items-center gap-1 text-sm font-semibold">
+                                      {addr.label.toLowerCase().includes("home") ? <Home className="size-4 text-primary" /> : <Building2 className="size-4 text-primary" />}
+                                      {addr.label}
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-sm font-semibold">
+                                      <MapPin className="size-4 text-primary" />
+                                      Address
+                                    </span>
+                                  )}
+                                  {addr.is_default && (
+                                    <span className="flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                      <Star className="size-2.5 fill-primary" /> Default
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Recipient info */}
+                                {(addr.recipient_name || addr.recipient_phone) && (
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                                    {addr.recipient_name && (
+                                      <span className="flex items-center gap-1">
+                                        <User className="size-3" /> {addr.recipient_name}
+                                      </span>
+                                    )}
+                                    {addr.recipient_phone && (
+                                      <span className="flex items-center gap-1">
+                                        <Smartphone className="size-3" /> {addr.recipient_phone}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {/* Full address */}
+                                <div className="flex items-start gap-1 text-sm text-foreground">
+                                  <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                                  <span>{addr.street}</span>
+                                </div>
+                                <p className="pl-4.5 text-xs text-muted-foreground">
+                                  {addr.ward && `${addr.ward}, `}{addr.city}, {addr.region}{addr.district ? `, ${addr.district}` : ""}
+                                </p>
+                                <p className="pl-4.5 text-xs text-muted-foreground">
+                                  {addr.country}{addr.postal_code ? ` • Postal: ${addr.postal_code}` : ""}
+                                </p>
+                                {addr.landmark && (
+                                  <p className="flex items-center gap-1 pl-4.5 text-xs text-muted-foreground">
+                                    <Info className="size-3" /> {addr.landmark}
+                                  </p>
                                 )}
                               </div>
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                {addr.city}, {addr.region}, {addr.country}
-                                {addr.postal_code ? ` • ${addr.postal_code}` : ""}
-                              </p>
+                              <div className="flex shrink-0 flex-col items-center gap-1">
+                                {!addr.is_default && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleSetDefault(addr.id) }}
+                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary transition-colors"
+                                    title="Set as default"
+                                  >
+                                    <Star className="size-3.5" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteAddress(addr.id) }}
+                                  className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                                  title="Delete address"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </button>
-                        )
-                      })}
+                          )
+                        })}
+                      </ItemGroup>
                       <button
                         onClick={() => setUseNewAddress(true)}
                         className="flex items-center justify-center gap-2 rounded-lg border border-dashed py-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary"
                       >
-                        <MapPin className="size-4" />
-                        Deliver to a new address
+                        <Plus className="size-4" />
+                        Add new address
                       </button>
                     </>
                   )}
 
-                  {/* New address form for authenticated users with no addresses, or when useNewAddress is true */}
+                  {/* New address form for authenticated users */}
                   {isAuthenticated && (addresses.length === 0 || useNewAddress) && (
-                    <div className="flex flex-col gap-3 rounded-lg border p-4 animate-fade-in-up">
-                      {useNewAddress && (
+                    <div className="flex flex-col gap-4 animate-fade-in-up">
+                      {useNewAddress && addresses.length > 0 && (
                         <button
                           onClick={() => setUseNewAddress(false)}
-                          className="mb-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                          className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
                         >
                           <ArrowLeft className="size-3" /> Use saved address
                         </button>
                       )}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Country</label>
-                          <Input value={newAddrCountry} onChange={(e) => setNewAddrCountry(e.target.value)} readOnly className="bg-muted/50" />
+                      {addresses.length === 0 && !useNewAddress && (
+                        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-8 text-center">
+                          <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                            <MapPin className="size-6 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">No saved addresses</p>
+                            <p className="text-xs text-muted-foreground">Add an address to continue</p>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => setUseNewAddress(true)}>
+                            <Plus className="size-4" /> Add Address
+                          </Button>
                         </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Region *</label>
-                          <select
-                            value={newAddrRegion}
-                            onChange={(e) => setNewAddrRegion(e.target.value)}
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            <option value="">Select region</option>
-                            {TZ_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">City *</label>
-                          <Input placeholder="e.g. Kinondoni" value={newAddrCity} onChange={(e) => setNewAddrCity(e.target.value)} />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Postal Code</label>
-                          <Input placeholder="e.g. 14110" value={newAddrPostalCode} onChange={(e) => setNewAddrPostalCode(e.target.value)} />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium">Street Address *</label>
-                        <Input placeholder="e.g. House No. 12, Mlimani Street" value={newAddrStreet} onChange={(e) => setNewAddrStreet(e.target.value)} />
-                      </div>
+                      )}
+                      {useNewAddress && (
+                        <FieldGroup>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-label">Address Label</FieldLabel>
+                              <Input id="new-addr-label" placeholder="Home, Office..." value={newAddrLabel} onChange={(e) => setNewAddrLabel(e.target.value)} />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-recipient">Recipient Name</FieldLabel>
+                              <Input id="new-addr-recipient" placeholder="Full name" value={newAddrRecipientName} onChange={(e) => setNewAddrRecipientName(e.target.value)} />
+                            </Field>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-phone">Recipient Phone</FieldLabel>
+                              <PhoneInput id="new-addr-phone" value={newAddrRecipientPhone} onChange={setNewAddrRecipientPhone} />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-country">Country</FieldLabel>
+                              <Input id="new-addr-country" value={newAddrCountry} readOnly className="bg-muted/50" />
+                            </Field>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-region">Region *</FieldLabel>
+                              <select
+                                id="new-addr-region"
+                                value={newAddrRegion}
+                                onChange={(e) => setNewAddrRegion(e.target.value)}
+                                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none dark:bg-input/30"
+                              >
+                                <option value="">Select region</option>
+                                {TZ_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                              </select>
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-city">City *</FieldLabel>
+                              <Input id="new-addr-city" placeholder="e.g. Kinondoni" value={newAddrCity} onChange={(e) => setNewAddrCity(e.target.value)} />
+                            </Field>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-district">District</FieldLabel>
+                              <Input id="new-addr-district" placeholder="e.g. Kinondoni" value={newAddrDistrict} onChange={(e) => setNewAddrDistrict(e.target.value)} />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-ward">Ward</FieldLabel>
+                              <Input id="new-addr-ward" placeholder="e.g. Kijitonyama" value={newAddrWard} onChange={(e) => setNewAddrWard(e.target.value)} />
+                            </Field>
+                          </div>
+                          <Field>
+                            <FieldLabel htmlFor="new-addr-street">Street *</FieldLabel>
+                            <Input id="new-addr-street" placeholder="e.g. House No. 12, Mlimani" value={newAddrStreet} onChange={(e) => setNewAddrStreet(e.target.value)} />
+                          </Field>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-landmark">Landmark</FieldLabel>
+                              <Input id="new-addr-landmark" placeholder="e.g. Near the shop" value={newAddrLandmark} onChange={(e) => setNewAddrLandmark(e.target.value)} />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="new-addr-postal">Postal Code</FieldLabel>
+                              <Input id="new-addr-postal" placeholder="e.g. 14110" value={newAddrPostalCode} onChange={(e) => setNewAddrPostalCode(e.target.value)} />
+                            </Field>
+                          </div>
+                          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={newAddrIsDefault}
+                              onChange={(e) => setNewAddrIsDefault(e.target.checked)}
+                              className="size-4 rounded border-input"
+                            />
+                            Set as default address
+                          </label>
+                          <div className="flex gap-2">
+                            <Button onClick={handleSaveNewAddress} loading={savingAddress} disabled={savingAddress}>
+                              Save Address
+                            </Button>
+                            {addresses.length > 0 && (
+                              <Button variant="outline" onClick={() => setUseNewAddress(false)}>
+                                Cancel
+                              </Button>
+                            )}
+                          </div>
+                        </FieldGroup>
+                      )}
                     </div>
                   )}
 
                   {/* Guest shipping form */}
                   {isGuest && (
-                    <div className="flex flex-col gap-4 rounded-lg border p-4">
-                      <div className="rounded-lg bg-primary/5 p-3 text-xs text-muted-foreground">
-                        <p className="flex items-center gap-2">
-                          <Info className="size-3.5 text-primary" />
-                          Fill in your delivery details. You&apos;ll create an account at the final step to complete your order.
+                    <FieldGroup>
+                      <div className="flex gap-3 rounded-lg bg-muted/50 p-3">
+                        <Info className="size-4 shrink-0 text-primary mt-0.5" />
+                        <p className="text-xs text-muted-foreground">
+                          Fill in your delivery details. You'll create an account at the final step to complete your order.
                         </p>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">First Name *</label>
-                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <Input className="pl-8" placeholder="John" value={shipFirstName} onChange={(e) => setShipFirstName(e.target.value)} required />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Last Name *</label>
-                          <Input placeholder="Doe" value={shipLastName} onChange={(e) => setShipLastName(e.target.value)} required />
-                        </div>
+                        <Field>
+                          <FieldLabel htmlFor="guest-fname">First Name *</FieldLabel>
+                          <Input id="guest-fname" placeholder="John" value={shipFirstName} onChange={(e) => setShipFirstName(e.target.value)} />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="guest-lname">Last Name *</FieldLabel>
+                          <Input id="guest-lname" placeholder="Doe" value={shipLastName} onChange={(e) => setShipLastName(e.target.value)} />
+                        </Field>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Phone *</label>
-                          <div className="relative">
-                            <Phone className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <Input className="pl-8" type="tel" placeholder="0712345678" value={shipPhone} onChange={(e) => setShipPhone(e.target.value)} required />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Email</label>
-                          <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <Input className="pl-8" type="email" placeholder="john@example.com" value={shipEmail} onChange={(e) => setShipEmail(e.target.value)} />
-                          </div>
-                        </div>
+                        <Field>
+                          <FieldLabel htmlFor="guest-phone">Phone *</FieldLabel>
+                          <PhoneInput id="guest-phone" value={shipPhone} onChange={setShipPhone} />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="guest-email">Email</FieldLabel>
+                          <Input id="guest-email" type="email" placeholder="john@example.com" value={shipEmail} onChange={(e) => setShipEmail(e.target.value)} />
+                        </Field>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Country</label>
-                          <Input value={shipCountry} onChange={(e) => setShipCountry(e.target.value)} readOnly className="bg-muted/50" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Region *</label>
+                        <Field>
+                          <FieldLabel htmlFor="guest-country">Country</FieldLabel>
+                          <Input id="guest-country" value={shipCountry} readOnly className="bg-muted/50" />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="guest-region">Region *</FieldLabel>
                           <select
+                            id="guest-region"
                             value={shipRegion}
                             onChange={(e) => setShipRegion(e.target.value)}
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none dark:bg-input/30"
                           >
                             <option value="">Select region</option>
                             {TZ_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
-                        </div>
+                        </Field>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">City *</label>
-                          <Input placeholder="e.g. Kinondoni" value={shipCity} onChange={(e) => setShipCity(e.target.value)} required />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium">Postal Code</label>
-                          <Input placeholder="e.g. 14110" value={shipPostalCode} onChange={(e) => setShipPostalCode(e.target.value)} />
-                        </div>
+                        <Field>
+                          <FieldLabel htmlFor="guest-city">City *</FieldLabel>
+                          <Input id="guest-city" placeholder="e.g. Kinondoni" value={shipCity} onChange={(e) => setShipCity(e.target.value)} />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="guest-postal">Postal Code</FieldLabel>
+                          <Input id="guest-postal" placeholder="e.g. 14110" value={shipPostalCode} onChange={(e) => setShipPostalCode(e.target.value)} />
+                        </Field>
                       </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium">Street Address *</label>
-                        <Input placeholder="e.g. House No. 12, Mlimani Street" value={shipStreet} onChange={(e) => setShipStreet(e.target.value)} required />
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field>
+                          <FieldLabel htmlFor="guest-district">District</FieldLabel>
+                          <Input id="guest-district" placeholder="e.g. Kinondoni" value={shipDistrict} onChange={(e) => setShipDistrict(e.target.value)} />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="guest-ward">Ward</FieldLabel>
+                          <Input id="guest-ward" placeholder="e.g. Kijitonyama" value={shipWard} onChange={(e) => setShipWard(e.target.value)} />
+                        </Field>
                       </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium">Order Notes (Optional)</label>
-                        <Input placeholder="Any special delivery instructions?" value={shipNotes} onChange={(e) => setShipNotes(e.target.value)} />
+                      <Field>
+                        <FieldLabel htmlFor="guest-street">Street Address *</FieldLabel>
+                        <Input id="guest-street" placeholder="e.g. House No. 12, Mlimani" value={shipStreet} onChange={(e) => setShipStreet(e.target.value)} />
+                      </Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field>
+                          <FieldLabel htmlFor="guest-landmark">Landmark</FieldLabel>
+                          <Input id="guest-landmark" placeholder="e.g. Near the shop" value={shipLandmark} onChange={(e) => setShipLandmark(e.target.value)} />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="guest-notes">Additional Notes (Optional)</FieldLabel>
+                          <Input id="guest-notes" placeholder="Any special delivery instructions?" value={shipNotes} onChange={(e) => setShipNotes(e.target.value)} />
+                        </Field>
                       </div>
-                    </div>
-                  )}
-
-                  {/* No addresses for authenticated user */}
-                  {isAuthenticated && addresses.length === 0 && !useNewAddress && (
-                    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-8 text-center">
-                      <MapPin className="size-8 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">No addresses found</p>
-                        <p className="text-xs text-muted-foreground">Add an address below to proceed</p>
-                      </div>
-                      <Button variant="outline" size="sm" onClick={() => setUseNewAddress(true)}>
-                        Add Address
-                      </Button>
-                    </div>
+                    </FieldGroup>
                   )}
                 </CardContent>
               </Card>
+
+              {/* Shipping Rate Selection (authenticated users only) */}
+              {isAuthenticated && selectedAddressId && !useNewAddress && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Truck className="size-4 text-primary" />
+                      Shipping Method
+                    </CardTitle>
+                    <CardDescription>Choose how you'd like to receive your order</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    {loadingQuotes ? (
+                      <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                        <Spinner className="size-4" />
+                        Finding shipping options...
+                      </div>
+                    ) : shippingQuotes.length === 0 ? (
+                      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-6 text-center">
+                        <Truck className="size-6 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">No shipping options available for this address</p>
+                      </div>
+                    ) : (
+                      <ItemGroup>
+                        {shippingQuotes.map((quote) => {
+                          const isSelected = selectedRateId === quote.rate_id
+                          return (
+                            <div
+                              key={quote.rate_id}
+                              onClick={() => setSelectedRateId(quote.rate_id)}
+                              className={cn(
+                                "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
+                                isSelected
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                                  : "border-border hover:bg-muted/50"
+                              )}
+                            >
+                              <div className={cn(
+                                "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+                                isSelected ? "border-primary bg-primary" : "border-muted-foreground/30"
+                              )}>
+                                {isSelected && <CheckCircle2 className="size-3 text-primary-foreground" />}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">{quote.method_name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {quote.carrier_name ? `${quote.carrier_name} • ` : ""}
+                                  {quote.min_delivery_days}-{quote.max_delivery_days} days
+                                </p>
+                              </div>
+                              <span className="text-sm font-medium text-primary">
+                                {Number(quote.amount) === 0 ? "Free" : formatPrice(Number(quote.amount))}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </ItemGroup>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Continue Button */}
               <div className="flex justify-end">
@@ -764,15 +1140,15 @@ export default function CheckoutPage() {
                     </div>
 
                     <div className="space-y-3">
-                      <h2 className="text-base font-medium tracking-tight">Inahakiki Malipo...</h2>
+                      <h2 className="text-base font-medium tracking-tight">Verifying Payment...</h2>
                       <p className="text-sm text-muted-foreground leading-relaxed px-4">
-                        Tafadhali angalia simu yako na uingize namba ya siri (PIN) ili kukamilisha malipo ya <strong>{formatPrice(total)}</strong>.
+                        Please check your phone and enter your PIN to complete the payment of <strong>{formatPrice(computedTotal)}</strong>.
                       </p>
                     </div>
 
                     <div className="w-full space-y-2">
                       <div className="flex justify-between text-xs font-medium text-muted-foreground">
-                        <span>Hali ya Uhakiki</span>
+                        <span>Verification Status</span>
                         <span>{statusAttempts}/30</span>
                       </div>
                       <Progress value={(statusAttempts / 30) * 100} className="h-1" />
@@ -782,7 +1158,7 @@ export default function CheckoutPage() {
                       onClick={() => setCheckingStatus(false)}
                       className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
                     >
-                      Ghairi na urudi nyuma
+                      Cancel and go back
                     </button>
                   </CardContent>
                 </Card>
@@ -794,8 +1170,8 @@ export default function CheckoutPage() {
                       {/* Sub-step 0: Select Method */}
                       <QuestionnaireItem isActive={paymentSubStep === 0}>
                         <div className="space-y-1">
-                          <QuestionnaireTitle>Njia ya Malipo</QuestionnaireTitle>
-                          <QuestionnaireDescription>Chagua jinsi ungependa kulipia agizo hili.</QuestionnaireDescription>
+                          <QuestionnaireTitle>Payment Method</QuestionnaireTitle>
+                          <QuestionnaireDescription>Choose how you'd like to pay for this order.</QuestionnaireDescription>
                         </div>
                         <QuestionnaireChoices>
                           <QuestionnaireChoice
@@ -806,7 +1182,7 @@ export default function CheckoutPage() {
                               setPaymentSubStep(1);
                             }}
                           >
-                            <span className="text-sm font-medium">Lipa kwa Simu</span>
+                            <span className="text-sm font-medium">Mobile Money</span>
                             <span className="text-xs text-muted-foreground">M-Pesa, Tigo Pesa, Airtel Money, Halopesa</span>
                           </QuestionnaireChoice>
                           <QuestionnaireChoice
@@ -817,7 +1193,7 @@ export default function CheckoutPage() {
                               setPaymentSubStep(1);
                             }}
                           >
-                            <span className="text-sm font-medium">Kadi ya Benki</span>
+                            <span className="text-sm font-medium">Bank Card</span>
                             <span className="text-xs text-muted-foreground">VISA, Mastercard (Via AzamPay)</span>
                           </QuestionnaireChoice>
                           <QuestionnaireChoice
@@ -828,8 +1204,8 @@ export default function CheckoutPage() {
                               setPaymentSubStep(1);
                             }}
                           >
-                            <span className="text-sm font-medium">Lipa Ukipokea (COD)</span>
-                            <span className="text-xs text-muted-foreground">Malipo ya pesa taslimu mlangoni</span>
+                            <span className="text-sm font-medium">Cash on Delivery (COD)</span>
+                            <span className="text-xs text-muted-foreground">Pay with cash at your doorstep</span>
                           </QuestionnaireChoice>
                         </QuestionnaireChoices>
                       </QuestionnaireItem>
@@ -841,15 +1217,15 @@ export default function CheckoutPage() {
                             onClick={() => setPaymentSubStep(0)}
                             className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
                           >
-                            <ArrowLeft className="size-3" /> Badili njia ya malipo
+                            <ArrowLeft className="size-3" /> Change payment method
                           </button>
 
                           {paymentMethod === "mobile_money" && (
                             <div className="space-y-4 animate-fade-in-up">
-                              <QuestionnaireTitle>Lipa kwa Simu</QuestionnaireTitle>
+                              <QuestionnaireTitle>Mobile Money</QuestionnaireTitle>
                               <div className="space-y-3">
                                 <div>
-                                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Mtoa Huduma</label>
+                                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Provider</label>
                                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                     {MNO_PROVIDERS.map((provider) => (
                                       <button
@@ -869,7 +1245,7 @@ export default function CheckoutPage() {
                                   </div>
                                 </div>
                                 <div>
-                                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Namba ya Simu</label>
+                                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Phone Number</label>
                                   <PhoneInput
                                     value={phoneNumber}
                                     onChange={setPhoneNumber}
@@ -881,15 +1257,15 @@ export default function CheckoutPage() {
 
                           {paymentMethod === "card" && (
                             <div className="space-y-3 animate-fade-in-up">
-                              <QuestionnaireTitle>Kadi ya Benki</QuestionnaireTitle>
+                              <QuestionnaireTitle>Bank Card</QuestionnaireTitle>
                               <div className="flex gap-3 rounded-lg border bg-muted/50 p-4">
                                 <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                                   <CreditCard className="size-4" />
                                 </div>
                                 <div className="space-y-0.5">
-                                  <p className="text-sm font-medium">Salama na AzamPay</p>
+                                  <p className="text-sm font-medium">Secure with AzamPay</p>
                                   <p className="text-xs text-muted-foreground leading-relaxed">
-                                    Utaelekezwa kwenye ukurasa wa malipo wa AzamPay kukamilisha muamala wako kwa usalama.
+                                    You'll be redirected to AzamPay's payment page to complete your transaction securely.
                                   </p>
                                 </div>
                               </div>
@@ -898,15 +1274,15 @@ export default function CheckoutPage() {
 
                           {paymentMethod === "cash_on_delivery" && (
                             <div className="space-y-3 animate-fade-in-up">
-                              <QuestionnaireTitle>Lipa Ukipokea</QuestionnaireTitle>
+                              <QuestionnaireTitle>Cash on Delivery</QuestionnaireTitle>
                               <div className="flex gap-3 rounded-lg border bg-muted/50 p-4">
                                 <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                                   <Truck className="size-4" />
                                 </div>
                                 <div className="space-y-0.5">
-                                  <p className="text-sm font-medium">Malipo Taslimu</p>
+                                  <p className="text-sm font-medium">Cash Payment</p>
                                   <p className="text-xs text-muted-foreground leading-relaxed">
-                                    Ulipia kiasi cha <strong>{formatPrice(total)}</strong> pindi utakapopokea bidhaa zako.
+                                    Pay <strong>{formatPrice(computedTotal)}</strong> when you receive your items.
                                   </p>
                                 </div>
                               </div>
@@ -919,7 +1295,7 @@ export default function CheckoutPage() {
                             loading={placing}
                             disabled={placing || (paymentMethod === "mobile_money" && !phoneNumber)}
                           >
-                            {paymentMethod === "cash_on_delivery" ? "Kamilisha Agizo" : `Lipia ${formatPrice(total)}`}
+                            {paymentMethod === "cash_on_delivery" ? "Complete Order" : `Pay ${formatPrice(computedTotal)}`}
                           </Button>
                         </div>
                       </QuestionnaireItem>
@@ -931,7 +1307,7 @@ export default function CheckoutPage() {
                     {/* Contact Info */}
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-sm">Mawasiliano</CardTitle>
+                        <CardTitle className="text-sm">Contact Info</CardTitle>
                       </CardHeader>
                       <CardContent className="pt-0">
                         <ItemGroup>
@@ -940,7 +1316,7 @@ export default function CheckoutPage() {
                               <User className="size-4" />
                             </ItemMedia>
                             <ItemContent>
-                              <ItemDescription>Jina Kamili</ItemDescription>
+                              <ItemDescription>Full Name</ItemDescription>
                               <ItemTitle>{`${shipFirstName} ${shipLastName}`.trim() || "—"}</ItemTitle>
                             </ItemContent>
                           </Item>
@@ -949,7 +1325,7 @@ export default function CheckoutPage() {
                               <Mail className="size-4" />
                             </ItemMedia>
                             <ItemContent>
-                              <ItemDescription>Barua Pepe</ItemDescription>
+                              <ItemDescription>Email</ItemDescription>
                               <ItemTitle>{shipEmail || "—"}</ItemTitle>
                             </ItemContent>
                           </Item>
@@ -960,25 +1336,25 @@ export default function CheckoutPage() {
                     {/* Payment Summary */}
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-sm">Muhtasari wa Malipo</CardTitle>
+                        <CardTitle className="text-sm">Payment Summary</CardTitle>
                       </CardHeader>
                       <CardContent className="pt-0 space-y-3">
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Bidhaa ({items.length})</span>
+                          <span className="text-muted-foreground">Items ({items.length})</span>
                           <span className="font-medium">{formatPrice(subtotal)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Usafirishaji</span>
-                          <span className="font-medium text-green-600">{shippingCost === 0 ? "Bure" : formatPrice(shippingCost)}</span>
+                          <span className="text-muted-foreground">Shipping</span>
+                          <span className="font-medium text-green-600">{computedShippingCost === 0 ? "Free" : formatPrice(computedShippingCost)}</span>
                         </div>
                         <Separator />
                         <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">Jumla Kuu</span>
-                          <span className="text-lg font-bold text-primary">{formatPrice(total)}</span>
+                          <span className="text-sm font-medium">Grand Total</span>
+                          <span className="text-lg font-bold text-primary">{formatPrice(computedTotal)}</span>
                         </div>
                         <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
                           <ShieldCheck className="size-3.5 text-green-600" />
-                          Malipo yako ni 100% Salama
+                          Your payments are 100% Secure
                         </div>
                       </CardContent>
                     </Card>
@@ -1064,18 +1440,69 @@ export default function CheckoutPage() {
                     (() => {
                       const addr = addresses.find((a) => a.id === selectedAddressId)
                       return addr ? (
-                        <div className="text-sm">
-                          <p className="font-medium">{addr.street}</p>
-                          <p className="text-muted-foreground">{addr.city}, {addr.region}, {addr.country}{addr.postal_code ? ` • ${addr.postal_code}` : ""}</p>
+                        <div className="space-y-1.5 text-sm">
+                          {addr.label && (
+                            <div className="flex items-center gap-1.5 font-semibold">
+                              {addr.label.toLowerCase().includes("home") ? <Home className="size-4 text-primary" /> : <Building2 className="size-4 text-primary" />}
+                              {addr.label}
+                              {addr.is_default && (
+                                <span className="flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                  <Star className="size-2.5 fill-primary" /> Default
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {(addr.recipient_name || addr.recipient_phone) && (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                              {addr.recipient_name && (
+                                <span className="flex items-center gap-1">
+                                  <User className="size-3" /> {addr.recipient_name}
+                                </span>
+                              )}
+                              {addr.recipient_phone && (
+                                <span className="flex items-center gap-1">
+                                  <Smartphone className="size-3" /> {addr.recipient_phone}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div className="flex items-start gap-1 text-foreground">
+                            <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                            <span>{addr.street}</span>
+                          </div>
+                          <p className="pl-4.5 text-xs text-muted-foreground">
+                            {addr.ward && `${addr.ward}, `}{addr.city}, {addr.region}{addr.district ? `, ${addr.district}` : ""}, {addr.country}
+                            {addr.postal_code ? ` • Postal: ${addr.postal_code}` : ""}
+                          </p>
+                          {addr.landmark && (
+                            <p className="flex items-center gap-1 pl-4.5 text-xs text-muted-foreground">
+                              <Info className="size-3" /> {addr.landmark}
+                            </p>
+                          )}
                         </div>
                       ) : null
                     })()
                   ) : (
-                    <div className="text-sm">
+                    <div className="space-y-1.5 text-sm">
                       <p className="font-medium">{shipFirstName} {shipLastName}</p>
-                      <p className="text-muted-foreground">{shipPhone}{shipEmail ? ` • ${shipEmail}` : ""}</p>
-                      <p className="text-muted-foreground">{shipStreet}, {shipCity}, {shipRegion}, {shipCountry}</p>
-                      {shipNotes && <p className="mt-1 text-xs italic text-muted-foreground">Note: {shipNotes}</p>}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Smartphone className="size-3" /> {shipPhone}</span>
+                        {shipEmail && <span className="flex items-center gap-1"><Mail className="size-3" /> {shipEmail}</span>}
+                      </div>
+                      <div className="flex items-start gap-1 text-foreground">
+                        <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                        <span>{shipStreet}</span>
+                      </div>
+                      <p className="pl-4.5 text-xs text-muted-foreground">
+                        {shipWard && `${shipWard}, `}{shipCity}, {shipRegion}{shipDistrict ? `, ${shipDistrict}` : ""}, {shipCountry}
+                        {shipPostalCode ? ` • Postal: ${shipPostalCode}` : ""}
+                      </p>
+                      {shipLandmark && (
+                        <p className="flex items-center gap-1 pl-4.5 text-xs text-muted-foreground">
+                          <Info className="size-3" /> {shipLandmark}
+                        </p>
+                      )}
+                      {shipNotes && <p className="mt-1 text-xs italic text-muted-foreground">Notes: {shipNotes}</p>}
                     </div>
                   )}
                 </CardContent>
@@ -1149,7 +1576,7 @@ export default function CheckoutPage() {
                             <p className="line-clamp-1 text-sm font-medium">{product?.name ?? `Product ${item.product_id.slice(0, 8)}`}</p>
                             <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
                           </div>
-                          <span className="text-sm font-bold text-primary">{formatPrice(Number(item.total_price))}</span>
+                          <span className="text-sm font-bold text-primary">{formatPrice(Number(item.unit_price) * item.quantity)}</span>
                         </div>
                       </div>
                     )
@@ -1174,7 +1601,7 @@ export default function CheckoutPage() {
                     {placing ? "Processing..." : (
                       <>
                         <Lock className="size-4" />
-                        Place Order • {formatPrice(total)}
+                        Place Order • {formatPrice(computedTotal)}
                       </>
                     )}
                   </Button>
@@ -1204,7 +1631,7 @@ export default function CheckoutPage() {
             <CardContent className="flex flex-col gap-4">
               {/* Items count */}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{items.length} item{items.length !== 1 ? "s" : ""}</span>
+                <span className="text-muted-foreground">{items.length} items</span>
                 <span className="font-medium">{formatPrice(subtotal)}</span>
               </div>
 
@@ -1221,7 +1648,11 @@ export default function CheckoutPage() {
                 )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Shipping</span>
-                  <span className="font-medium">{shippingCost === 0 ? "Calculated after" : formatPrice(shippingCost)}</span>
+                  <span className="font-medium">
+                    {selectedRateId
+                      ? computedShippingCost === 0 ? "Free" : formatPrice(computedShippingCost)
+                      : "Calculated at checkout"}
+                  </span>
                 </div>
               </div>
 
@@ -1229,7 +1660,7 @@ export default function CheckoutPage() {
 
               <div className="flex justify-between text-base font-bold">
                 <span>Total</span>
-                <span className="text-primary">{formatPrice(total)}</span>
+                <span className="text-primary">{formatPrice(computedTotal)}</span>
               </div>
 
               {/* Trust badges */}
@@ -1255,7 +1686,7 @@ export default function CheckoutPage() {
                   </ItemMedia>
                   <ItemContent>
                     <ItemTitle className="text-xs font-medium text-foreground">
-                      Inachakata malipo salama...
+                      Processing secure payment...
                     </ItemTitle>
                   </ItemContent>
                 </Item>

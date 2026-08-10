@@ -169,6 +169,47 @@ export function Footer() {
             </ul>
           </div>
         </div>
+
+        {/* Mobile App Download */}
+        <div className="mt-10 flex flex-col items-center justify-between gap-4 rounded-2xl border bg-background/50 p-6 sm:flex-row">
+          <div className="text-center sm:text-left">
+            <h3 className="text-base font-bold">Get the XerinMarket App</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Shop anywhere, anytime. Download our mobile app for the best experience.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <a
+              href="https://play.google.com/store/apps/details?id=com.xerinmarket.com&pcampaignid=web_share"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-3 rounded-xl bg-black px-5 py-3 transition-all hover:scale-[1.03] hover:shadow-lg"
+            >
+              <svg className="size-7" viewBox="0 0 24 24" fill="none">
+                <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .609-.92z" fill="#34A853"/>
+                <path d="M14.539 11.193L17.16 8.572l3.873 2.197a1 1 0 0 1 0 1.462l-3.873 2.197-2.621-2.621a.5.5 0 0 1 0-.707z" fill="#FBBC04"/>
+                <path d="M17.16 8.572L4.32 1.297a.97.97 0 0 0-.71-.07L13.792 12 3.61 22.186a.97.97 0 0 0 .71-.07L17.16 15.428 13.792 12l3.368-3.428z" fill="#EA4335"/>
+                <path d="M3.61 22.186a.97.97 0 0 1-.71-.07L4.32 1.297a.97.97 0 0 1 .71.07l12.13 7.275L13.792 12 3.61 22.186z" fill="#4285F4"/>
+              </svg>
+              <div className="flex flex-col leading-tight">
+                <span className="text-[10px] text-white/70">GET IT ON</span>
+                <span className="text-sm font-bold text-white">Google Play</span>
+              </div>
+            </a>
+            <div
+              className="group flex cursor-not-allowed items-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/20 px-5 py-3 opacity-80"
+              title="Coming Soon"
+            >
+              <svg className="size-7 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.08 1.85-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.08zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+              </svg>
+              <div className="flex flex-col leading-tight">
+                <span className="text-[10px] text-muted-foreground">DOWNLOAD ON THE</span>
+                <span className="text-sm font-bold text-muted-foreground">App Store · Soon</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Bottom bar */}

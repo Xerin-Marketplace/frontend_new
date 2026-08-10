@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import { type ApiProduct, formatPrice, getPrimaryImage, getDisplayPrice } from "@/lib/store-types"
 import { toast } from "@/components/ui/toast"
 import { useCart } from "@/lib/cart-context"
+import { useWishlist } from "@/lib/wishlist-context"
 import { type ApiError } from "@/lib/api"
 
 function getApiError(err: unknown): string {
@@ -20,9 +21,13 @@ function getApiError(err: unknown): string {
 export function ProductCard({ product }: { product: ApiProduct }) {
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
+  const [wishlisting, setWishlisting] = useState(false)
   const { addToCart } = useCart()
+  const { toggleWishlist, isWishlisted } = useWishlist()
+  
   const image = getPrimaryImage(product)
   const { price, originalPrice, discount } = getDisplayPrice(product)
+  const wishlisted = isWishlisted(product.id)
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -38,6 +43,25 @@ export function ProductCard({ product }: { product: ApiProduct }) {
       toast.add({ title: "Failed to add", description: getApiError(err), type: "error" })
     } finally {
       setAdding(false)
+    }
+  }
+
+  const handleToggleWishlist = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (wishlisting) return
+    setWishlisting(true)
+    try {
+      await toggleWishlist(product)
+      toast.add({ 
+        title: wishlisted ? "Removed from wishlist" : "Added to wishlist", 
+        description: product.name,
+        type: "success" 
+      })
+    } catch (err) {
+      toast.add({ title: "Wishlist update failed", description: getApiError(err), type: "error" })
+    } finally {
+      setWishlisting(false)
     }
   }
 
@@ -64,10 +88,16 @@ export function ProductCard({ product }: { product: ApiProduct }) {
             </Badge>
           )}
           <button
-            className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-background/80 backdrop-blur transition-colors hover:bg-background"
-            onClick={(e) => e.preventDefault()}
+            className={cn(
+              "absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-background/80 backdrop-blur transition-all active:scale-90",
+              wishlisted ? "bg-red-50 text-red-500" : "text-muted-foreground hover:bg-background"
+            )}
+            onClick={handleToggleWishlist}
+            disabled={wishlisting}
           >
-            <Heart className="size-4 text-muted-foreground" />
+            <Heart 
+              className={cn("size-4 transition-colors", wishlisted && "fill-current")} 
+            />
           </button>
           {!product.is_active && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60">

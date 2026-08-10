@@ -12,6 +12,30 @@ export type WishlistItem = {
   created_at: string
 }
 
+type WishlistProductServerItem = {
+  wishlist_id: string
+  product_id: string
+  name: string
+  slug: string
+  sku: string
+  price: number
+  sale_price: number | null
+  currency: string
+  primary_image_url: string | null
+  store_name: string | null
+  store_slug: string | null
+  is_available: boolean
+  is_in_stock: boolean
+  created_at: string
+}
+
+type WishlistProductListResponse = {
+  total: number
+  page: number
+  page_size: number
+  results: WishlistProductServerItem[]
+}
+
 type GuestWishlistItem = {
   product_id: string
   product: ApiProduct
@@ -49,17 +73,15 @@ const WishlistContext = React.createContext<WishlistContextValue | null>(null)
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
-  const [serverItems, setServerItems] = React.useState<WishlistItem[]>([])
+  const [serverItems, setServerItems] = React.useState<WishlistProductServerItem[]>([])
   const [guestItems, setGuestItems] = React.useState<GuestWishlistItem[]>([])
   const [loading, setLoading] = React.useState(true)
 
   const fetchServerWishlist = React.useCallback(async () => {
     setLoading(true)
     try {
-      // Assuming GET /wishlist returns an array of items or an object with items array
-      const data = await api.get<WishlistItem[] | { items: WishlistItem[] }>("/wishlist")
-      const items = Array.isArray(data) ? data : data.items || []
-      setServerItems(items)
+      const data = await api.get<WishlistProductListResponse>("/wishlist/products")
+      setServerItems(data.results || [])
     } catch {
       setServerItems([])
     } finally {
@@ -103,7 +125,37 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
 
   const items = React.useMemo(() => {
     if (isAuthenticated) {
-      return serverItems
+      return serverItems.map((si) => ({
+        id: si.wishlist_id,
+        product_id: si.product_id,
+        created_at: si.created_at,
+        product: {
+          id: si.product_id,
+          name: si.name,
+          slug: si.slug,
+          sku: si.sku,
+          price: si.price,
+          sale_price: si.sale_price,
+          currency: si.currency,
+          is_active: si.is_available,
+          images: si.primary_image_url ? [{
+            id: 'primary',
+            product_id: si.product_id,
+            image_url: si.primary_image_url,
+            thumbnail_url: si.primary_image_url,
+            is_primary: true,
+            display_order: 0,
+            alt_text: si.name
+          }] : [],
+          description: null,
+          seller_id: '',
+          category_id: '',
+          brand_id: null,
+          weight: null,
+          status: 'approved',
+          created_at: si.created_at
+        } as ApiProduct
+      }))
     }
     return guestItems.map((gi, idx) => ({
       id: `guest-${idx}`,
@@ -124,11 +176,9 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
     async (product: ApiProduct) => {
       if (isAuthenticated) {
         if (isWishlisted(product.id)) {
-          // Assuming DELETE /wishlist/{product_id}
-          await api.delete(`/wishlist/${product.id}`)
+          await api.delete(`/wishlist/products/${product.id}`)
         } else {
-          // Assuming POST /wishlist with product_id
-          await api.post("/wishlist", { product_id: product.id })
+          await api.post(`/wishlist/products/${product.id}`)
         }
         await fetchServerWishlist()
       } else {
@@ -149,7 +199,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
   const removeItem = React.useCallback(
     async (productId: string) => {
       if (isAuthenticated) {
-        await api.delete(`/wishlist/${productId}`)
+        await api.delete(`/wishlist/products/${productId}`)
         await fetchServerWishlist()
       } else {
         const current = getGuestWishlist()

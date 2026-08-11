@@ -893,9 +893,7 @@ function TransferDialog({
             </Field>
           </FieldGroup>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
-            </DialogClose>
+            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
             <Button type="submit" loading={saving}>Create Transfer</Button>
           </DialogFooter>
         </form>

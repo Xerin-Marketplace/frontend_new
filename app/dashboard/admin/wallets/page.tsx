@@ -50,7 +50,7 @@ import {
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
-import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
+import { PageSkeleton, StatsCardSkeleton, TableSkeleton } from "@/components/skeletons"
 
 type SellerWallet = {
   id: string

@@ -21,6 +21,11 @@ import {
   Truck,
   Boxes,
   Warehouse,
+  Bike,
+  ArrowRightLeft,
+  Bell,
+  Mail,
+  Cog,
   ShieldAlert,
   type LucideIcon,
 } from "lucide-react"
@@ -150,6 +155,19 @@ const adminData = {
       ],
     },
     {
+      title: "Logistics",
+      url: "/dashboard/admin/logistics",
+      icon: Bike,
+      items: [
+        { title: "Overview", url: "/dashboard/admin/logistics" },
+        { title: "Drivers", url: "/dashboard/admin/logistics/drivers" },
+        { title: "Driver KYC", url: "/dashboard/admin/logistics/driver-kyc" },
+        { title: "Delivery Trips", url: "/dashboard/admin/logistics/trips" },
+        { title: "Fare Management", url: "/dashboard/admin/logistics/fare-management" },
+        { title: "Stock Transfers", url: "/dashboard/admin/logistics/transfers" },
+      ],
+    },
+    {
       title: "Wallets",
       url: "/dashboard/admin/wallets",
       icon: Wallet,
@@ -167,11 +185,22 @@ const adminData = {
       ],
     },
     {
+      title: "Notifications",
+      url: "/dashboard/admin/notifications",
+      icon: Bell,
+      items: [
+        { title: "Overview", url: "/dashboard/admin/notifications" },
+        { title: "Templates", url: "/dashboard/admin/notifications/templates" },
+        { title: "Delivery Logs", url: "/dashboard/admin/notifications/logs" },
+      ],
+    },
+    {
       title: "Settings",
       url: "/dashboard/admin/settings",
       icon: Settings,
       items: [
-        { title: "Platform Settings", url: "/dashboard/admin/settings" },
+        { title: "Account", url: "/dashboard/admin/settings" },
+        { title: "System Settings", url: "/dashboard/admin/system-settings" },
       ],
     },
   ],
@@ -233,8 +262,10 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
     Coupons: "coupons:read",
     Shipping: "shipping:read",
     Fulfilment: "inventory:manage",
+    Logistics: "logistics:read",
     Wallets: "wallet:read",
     Refunds: "refunds:read",
+    Notifications: "notification_logs:read",
     Settings: null,
   }
   const visibleAdminNavigation = adminData.navMain.filter((item) => {

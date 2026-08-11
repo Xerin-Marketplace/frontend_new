@@ -118,6 +118,17 @@ type ShippingQuoteOption = {
   max_delivery_days: number
 }
 
+type PerSellerQuote = {
+  seller_id: string
+  seller_subtotal: number
+  shipping_amount: number
+  total: number
+  method_name: string
+  carrier_name: string | null
+  min_delivery_days: number
+  max_delivery_days: number
+}
+
 const MNO_PROVIDERS = [
   { value: "mpesa", label: "M-Pesa", color: "text-green-600", dot: "bg-green-500" },
   { value: "airtel", label: "Airtel Money", color: "text-red-600", dot: "bg-red-500" },
@@ -211,10 +222,13 @@ export default function CheckoutPage() {
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteOption[]>([])
   const [selectedRateId, setSelectedRateId] = useState<string | null>(null)
   const [loadingQuotes, setLoadingQuotes] = useState(false)
+  const [perSellerQuotes, setPerSellerQuotes] = useState<PerSellerQuote[]>([])
 
-  // Compute actual shipping cost from selected quote
+  // Compute actual shipping cost from per-seller quotes (sum of all seller shipping amounts)
+  const perSellerShippingTotal = perSellerQuotes.reduce((sum, q) => sum + Number(q.shipping_amount), 0)
+  // Compute actual shipping cost from selected quote (fallback)
   const selectedQuote = shippingQuotes.find((q) => q.rate_id === selectedRateId)
-  const computedShippingCost = selectedQuote ? Number(selectedQuote.amount) : 0
+  const computedShippingCost = perSellerQuotes.length > 0 ? perSellerShippingTotal : (selectedQuote ? Number(selectedQuote.amount) : 0)
   const computedTotal = subtotal - discount + computedShippingCost
 
   // Payment state
@@ -337,12 +351,24 @@ export default function CheckoutPage() {
   const fetchShippingQuotes = useCallback(async (addressId: string) => {
     setLoadingQuotes(true)
     try {
-      const quotes = await api.post<ShippingQuoteOption[]>("/shipping/quote", {
-        address_id: addressId,
-        subtotal: subtotal,
-        weight_kg: 0,
-      })
+      const [quotes, sellerQuotes] = await Promise.all([
+        api.post<ShippingQuoteOption[]>("/shipping/quote", {
+          address_id: addressId,
+          subtotal: subtotal,
+          weight_kg: 0,
+        }),
+        api.post<PerSellerQuote[]>("/shipping/quote-per-seller", {
+          address_id: addressId,
+          items: items.map((i) => ({
+            product_id: i.product_id,
+            seller_id: i.product?.seller_id ?? "",
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+          })),
+        }).catch(() => [] as PerSellerQuote[]),
+      ])
       setShippingQuotes(quotes)
+      setPerSellerQuotes(sellerQuotes)
       if (quotes.length > 0) {
         setSelectedRateId(quotes[0].rate_id)
       } else {
@@ -351,11 +377,12 @@ export default function CheckoutPage() {
     } catch (err) {
       console.error("Shipping quote error:", err)
       setShippingQuotes([])
+      setPerSellerQuotes([])
       setSelectedRateId(null)
     } finally {
       setLoadingQuotes(false)
     }
-  }, [subtotal])
+  }, [subtotal, items])
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -372,6 +399,7 @@ export default function CheckoutPage() {
       fetchShippingQuotes(selectedAddressId)
     } else {
       setShippingQuotes([])
+      setPerSellerQuotes([])
       setSelectedRateId(null)
     }
   }, [isAuthenticated, selectedAddressId, useNewAddress, fetchShippingQuotes])
@@ -536,11 +564,23 @@ export default function CheckoutPage() {
         addressId = addr.id
 
         // Fetch shipping quotes for the new address
-        const quotes = await api.post<ShippingQuoteOption[]>("/shipping/quote", {
-          address_id: addr.id,
-          subtotal: subtotal,
-          weight_kg: 0,
-        })
+        const [quotes, sellerQuotes] = await Promise.all([
+          api.post<ShippingQuoteOption[]>("/shipping/quote", {
+            address_id: addr.id,
+            subtotal: subtotal,
+            weight_kg: 0,
+          }),
+          api.post<PerSellerQuote[]>("/shipping/quote-per-seller", {
+            address_id: addr.id,
+            items: items.map((i) => ({
+              product_id: i.product_id,
+              seller_id: i.product?.seller_id ?? "",
+              quantity: i.quantity,
+              unit_price: i.unit_price,
+            })),
+          }).catch(() => [] as PerSellerQuote[]),
+        ])
+        setPerSellerQuotes(sellerQuotes)
 
         if (quotes.length === 0) {
           toast.add({ title: "No shipping options available for this address", type: "error" })
@@ -573,7 +613,7 @@ export default function CheckoutPage() {
       // Step 2: Handle payment
       if (paymentMethod === "cash_on_delivery") {
         toast.add({ title: "Order placed successfully!", description: "Pay with cash when your order arrives.", type: "success" })
-        router.push(`/checkout/success?order_id=${order.id}`)
+        router.push(`/checkout/success?order_id=${order.id}&ref=${order.order_number ?? ""}`)
         return
       }
 
@@ -597,7 +637,7 @@ export default function CheckoutPage() {
           router.push(`/checkout/processing?payment_id=${payment.id}&order_id=${order.id}`)
         }
       } else {
-        router.push(`/checkout/success?order_id=${order.id}&payment_id=${payment.id}`)
+        router.push(`/checkout/success?order_id=${order.id}&payment_id=${payment.id}&ref=${order.order_number ?? ""}`)
       }
     } catch (err) {
       toast.add({ title: "Failed to place order", description: getApiError(err), type: "error" })
@@ -1343,10 +1383,27 @@ export default function CheckoutPage() {
                           <span className="text-muted-foreground">Items ({items.length})</span>
                           <span className="font-medium">{formatPrice(subtotal)}</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Shipping</span>
-                          <span className="font-medium text-green-600">{computedShippingCost === 0 ? "Free" : formatPrice(computedShippingCost)}</span>
-                        </div>
+                        {perSellerQuotes.length > 0 ? (
+                          <div className="flex flex-col gap-1.5">
+                            {perSellerQuotes.map((q) => (
+                              <div key={q.seller_id} className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">
+                                  Shipping · Seller {q.seller_id.slice(0, 8)}
+                                </span>
+                                <span className="font-medium">{Number(q.shipping_amount) === 0 ? "Free" : formatPrice(Number(q.shipping_amount))}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Total Shipping</span>
+                              <span className="font-medium text-green-600">{computedShippingCost === 0 ? "Free" : formatPrice(computedShippingCost)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Shipping</span>
+                            <span className="font-medium text-green-600">{computedShippingCost === 0 ? "Free" : formatPrice(computedShippingCost)}</span>
+                          </div>
+                        )}
                         <Separator />
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">Grand Total</span>
@@ -1646,14 +1703,29 @@ export default function CheckoutPage() {
                     <span>-{formatPrice(discount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shipping</span>
-                  <span className="font-medium">
-                    {selectedRateId
-                      ? computedShippingCost === 0 ? "Free" : formatPrice(computedShippingCost)
-                      : "Calculated at checkout"}
-                  </span>
-                </div>
+                {perSellerQuotes.length > 0 ? (
+                  <div className="flex flex-col gap-1">
+                    {perSellerQuotes.map((q) => (
+                      <div key={q.seller_id} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Shipping · Seller {q.seller_id.slice(0, 8)}</span>
+                        <span className="font-medium">{Number(q.shipping_amount) === 0 ? "Free" : formatPrice(Number(q.shipping_amount))}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Shipping</span>
+                      <span className="font-medium">{computedShippingCost === 0 ? "Free" : formatPrice(computedShippingCost)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Shipping</span>
+                    <span className="font-medium">
+                      {selectedRateId
+                        ? computedShippingCost === 0 ? "Free" : formatPrice(computedShippingCost)
+                        : "Calculated at checkout"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <Separator />

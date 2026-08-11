@@ -93,6 +93,7 @@ type InboundShipmentT = {
   status: string
   expected_arrival_at: string | null
   received_at: string | null
+  completed_at: string | null
   total_items: number
   total_quantity: number
   notes: string | null
@@ -110,6 +111,9 @@ type InboundItemT = {
   received_quantity: number
   putaway_quantity: number
   status: string
+  condition: string | null
+  notes: string | null
+  created_at: string
 }
 
 type PickListT = {
@@ -120,8 +124,10 @@ type PickListT = {
   seller_order_id: string
   status: string
   assigned_to: string | null
+  assigned_to_name: string | null
   total_items: number
   total_quantity: number
+  notes: string | null
   created_at: string
   completed_at: string | null
 }
@@ -218,10 +224,10 @@ function EmptyState({ icon: Icon, title, description }: { icon: React.ElementTyp
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function FulfilmentManagement() {
+export function FulfilmentManagement({ initialTab = "overview" }: { initialTab?: Tab }) {
   const { isSuperAdmin, hasPermission } = useAuth()
   const canManage = isSuperAdmin || hasPermission("inventory:manage")
-  const [tab, setTab] = React.useState<Tab>("overview")
+  const [tab, setTab] = React.useState<Tab>(initialTab)
 
   return (
     <div className="flex flex-col gap-6">
@@ -286,20 +292,21 @@ function OverviewTab() {
     const load = async () => {
       setLoading(true)
       try {
-        const [warehouses, inbound, picklists] = await Promise.all([
-          api.get<WarehouseT[]>("/fulfilment/warehouses").catch(() => []),
-          api.get<InboundShipmentT[]>("/fulfilment/inbound").catch(() => []),
-          api.get<PickListT[]>("/fulfilment/picklists").catch(() => []),
-        ])
+        const data = await api.get<{
+          warehouses: Record<string, number>
+          inbound: Record<string, number>
+          pick_lists: Record<string, number>
+          inventory: Record<string, number>
+        }>("/fulfilment/dashboard")
         setStats({
-          totalWarehouses: warehouses.length,
-          activeWarehouses: warehouses.filter((w) => w.status === "active").length,
-          pendingInbound: inbound.filter((i) => i.status === "draft" || i.status === "submitted").length,
-          inTransitInbound: inbound.filter((i) => i.status === "in_transit").length,
-          completedInbound: inbound.filter((i) => i.status === "completed").length,
-          pendingPickLists: picklists.filter((p) => p.status === "pending").length,
-          inProgressPickLists: picklists.filter((p) => p.status === "in_progress" || p.status === "assigned").length,
-          packedPickLists: picklists.filter((p) => p.status === "picked" || p.status === "packed").length,
+          totalWarehouses: data.warehouses?.total ?? 0,
+          activeWarehouses: data.warehouses?.active ?? 0,
+          pendingInbound: data.inbound?.pending ?? 0,
+          inTransitInbound: data.inbound?.in_transit ?? 0,
+          completedInbound: data.inbound?.completed ?? 0,
+          pendingPickLists: data.pick_lists?.pending ?? 0,
+          inProgressPickLists: (data.pick_lists?.in_progress ?? 0) + (data.pick_lists?.assigned ?? 0),
+          packedPickLists: (data.pick_lists?.packed ?? 0) + (data.pick_lists?.picked ?? 0),
         })
       } catch {
         // API may not be ready yet — show zeros
@@ -1123,7 +1130,7 @@ function PickListsTab({ canManage }: { canManage: boolean }) {
                       <span className="text-sm font-medium">{p.total_items}</span>
                       <span className="text-xs text-muted-foreground"> / {p.total_quantity} units</span>
                     </TableCell>
-                    <TableCell className="text-sm">{p.assigned_to ?? "Unassigned"}</TableCell>
+                    <TableCell className="text-sm">{p.assigned_to_name ?? "Unassigned"}</TableCell>
                     <TableCell>
                       <StatusBadge status={p.status} variantMap={pickListStatusVariant} />
                     </TableCell>

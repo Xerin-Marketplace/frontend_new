@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -12,6 +13,7 @@ import {
   Tag,
   Truck,
   ShieldCheck,
+  Store,
 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -128,6 +130,21 @@ export default function CartPage() {
     )
   }
 
+  // Group items by seller
+  const sellerGroups = React.useMemo(() => {
+    const groups = new Map<string, typeof items>()
+    for (const item of items) {
+      const sellerId = item.product?.seller_id ?? "unknown"
+      if (!groups.has(sellerId)) groups.set(sellerId, [])
+      groups.get(sellerId)!.push(item)
+    }
+    return Array.from(groups.entries()).map(([sellerId, sellerItems]) => ({
+      sellerId,
+      sellerItems,
+      sellerSubtotal: sellerItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0),
+    }))
+  }, [items])
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
       <div className="mb-6 flex items-center gap-3">
@@ -138,65 +155,81 @@ export default function CartPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Items */}
-        <div className="flex flex-col gap-3 lg:col-span-2">
-          {items.map((item) => {
-            const product = item.product
-            const image = product?.images?.find((img) => img.is_primary)?.image_url ?? product?.images?.[0]?.image_url
-            return (
-              <Card key={item.id} className="p-3">
-                <div className="flex gap-3">
-                  <Link
-                    href={`/products/${item.product_id}`}
-                    className="relative size-24 shrink-0 overflow-hidden rounded-lg border bg-muted"
-                  >
-                    {image ? (
-                      <img src={image} alt={product?.name ?? "Product"} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                        <ShoppingBag className="size-6" />
-                      </div>
-                    )}
-                  </Link>
-
-                  <div className="flex flex-1 flex-col gap-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <Link href={`/products/${item.product_id}`} className="line-clamp-2 text-sm font-medium hover:text-primary">
-                          {product?.name ?? `Product ${item.product_id.slice(0, 8)}`}
-                        </Link>
-                        <p className="text-xs text-muted-foreground">{product?.currency ?? "TSh"}</p>
-                      </div>
-                      <button
-                        onClick={() => handleRemove(item.id)}
-                        disabled={updating === item.id}
-                        className="text-muted-foreground hover:text-destructive disabled:opacity-50"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </div>
-
-                    <div className="mt-auto flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <Button variant="outline" size="icon-sm" onClick={() => handleUpdateQty(item.id, -1)} disabled={updating === item.id}>
-                          <Minus className="size-3.5" />
-                        </Button>
-                        <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                        <Button variant="outline" size="icon-sm" onClick={() => handleUpdateQty(item.id, 1)} disabled={updating === item.id}>
-                          <Plus className="size-3.5" />
-                        </Button>
-                      </div>
-
-                      <div className="flex flex-col items-end">
-                        <span className="text-sm font-bold text-primary">{formatPrice(Number(item.unit_price) * item.quantity)}</span>
-                        <span className="text-xs text-muted-foreground">{formatPrice(Number(item.unit_price))} each</span>
-                      </div>
-                    </div>
-                  </div>
+        {/* Items grouped by seller */}
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          {sellerGroups.map(({ sellerId, sellerItems, sellerSubtotal }) => (
+            <div key={sellerId} className="flex flex-col gap-2">
+              {/* Seller header */}
+              <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Store className="size-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Seller {sellerId.slice(0, 8)}</span>
+                  <span className="text-xs text-muted-foreground">· {sellerItems.length} {sellerItems.length === 1 ? "item" : "items"}</span>
                 </div>
-              </Card>
-            )
-          })}
+                <span className="text-sm font-semibold text-muted-foreground">{formatPrice(sellerSubtotal)}</span>
+              </div>
+              {/* Seller items */}
+              <div className="flex flex-col gap-2">
+                {sellerItems.map((item) => {
+                  const product = item.product
+                  const image = product?.images?.find((img) => img.is_primary)?.image_url ?? product?.images?.[0]?.image_url
+                  return (
+                    <Card key={item.id} className="p-3">
+                      <div className="flex gap-3">
+                        <Link
+                          href={`/products/${item.product_id}`}
+                          className="relative size-24 shrink-0 overflow-hidden rounded-lg border bg-muted"
+                        >
+                          {image ? (
+                            <img src={image} alt={product?.name ?? "Product"} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                              <ShoppingBag className="size-6" />
+                            </div>
+                          )}
+                        </Link>
+
+                        <div className="flex flex-1 flex-col gap-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <Link href={`/products/${item.product_id}`} className="line-clamp-2 text-sm font-medium hover:text-primary">
+                                {product?.name ?? `Product ${item.product_id.slice(0, 8)}`}
+                              </Link>
+                              <p className="text-xs text-muted-foreground">{product?.currency ?? "TSh"}</p>
+                            </div>
+                            <button
+                              onClick={() => handleRemove(item.id)}
+                              disabled={updating === item.id}
+                              className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+
+                          <div className="mt-auto flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              <Button variant="outline" size="icon-sm" onClick={() => handleUpdateQty(item.id, -1)} disabled={updating === item.id}>
+                                <Minus className="size-3.5" />
+                              </Button>
+                              <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
+                              <Button variant="outline" size="icon-sm" onClick={() => handleUpdateQty(item.id, 1)} disabled={updating === item.id}>
+                                <Plus className="size-3.5" />
+                              </Button>
+                            </div>
+
+                            <div className="flex flex-col items-end">
+                              <span className="text-sm font-bold text-primary">{formatPrice(Number(item.unit_price) * item.quantity)}</span>
+                              <span className="text-xs text-muted-foreground">{formatPrice(Number(item.unit_price))} each</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
 
           <Link href="/products" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">
             <ArrowRight className="size-4 rotate-180" />
@@ -263,12 +296,10 @@ export default function CartPage() {
                 </div>
               </div>
 
-              {subtotal < 100000 && (
+              {subtotal < 50000 && (
                 <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-2.5 text-xs text-primary">
                   <Truck className="size-4 shrink-0" />
-                  {subtotal < 50000
-                    ? `Add ${formatPrice(50000 - subtotal)} more for free shipping (Dar es Salaam)`
-                    : `Add ${formatPrice(100000 - subtotal)} more for free shipping nationwide`}
+                  {`Add ${formatPrice(50000 - subtotal)} more to qualify for free shipping on selected routes`}
                 </div>
               )}
 

@@ -53,8 +53,9 @@ function getApiError(err: unknown): string {
 
 const orderStatusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending: { label: "Pending", variant: "outline" },
-  confirmed: { label: "Confirmed", variant: "secondary" },
+  paid: { label: "Paid", variant: "secondary" },
   processing: { label: "Processing", variant: "secondary" },
+  received_at_hub: { label: "At Xerin Hub", variant: "secondary" },
   shipped: { label: "Shipped", variant: "secondary" },
   delivered: { label: "Delivered", variant: "default" },
   cancelled: { label: "Cancelled", variant: "destructive" },
@@ -137,7 +138,7 @@ export default function UserPaymentsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {orders.filter((o) => ["pending", "confirmed", "processing", "shipped"].includes(o.status)).length}
+              {orders.filter((o) => ["pending", "paid", "processing", "received_at_hub", "shipped"].includes(o.status)).length}
             </div>
           </CardContent>
         </Card>

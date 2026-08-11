@@ -15,6 +15,8 @@ import {
   Clock,
   ArrowRight,
   Info,
+  ArrowRightLeft,
+  Eye,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
@@ -89,7 +91,7 @@ type FBXInventoryT = {
   updated_at: string | null
 }
 
-type Tab = "overview" | "inbound" | "inventory"
+type Tab = "overview" | "inbound" | "inventory" | "transfers"
 
 const message = (error: unknown) => (error as ApiError)?.detail || "The request could not be completed."
 
@@ -156,8 +158,8 @@ function StatCard({
   )
 }
 
-export function SellerFulfilment() {
-  const [tab, setTab] = React.useState<Tab>("overview")
+export function SellerFulfilment({ initialTab = "overview" }: { initialTab?: Tab }) {
+  const [tab, setTab] = React.useState<Tab>(initialTab)
 
   return (
     <div className="flex flex-col gap-6">
@@ -179,6 +181,9 @@ export function SellerFulfilment() {
           <TabsTrigger value="inventory">
             <Package className="size-4" /> FBX Inventory
           </TabsTrigger>
+          <TabsTrigger value="transfers">
+            <ArrowRightLeft className="size-4" /> Stock Transfers
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -189,6 +194,9 @@ export function SellerFulfilment() {
         </TabsContent>
         <TabsContent value="inventory">
           <SellerInventoryTab />
+        </TabsContent>
+        <TabsContent value="transfers">
+          <SellerTransfersTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -211,18 +219,18 @@ function SellerOverviewTab() {
     const load = async () => {
       setLoading(true)
       try {
-        const [inbound, inventory] = await Promise.all([
-          api.get<InboundShipmentT[]>("/fulfilment/inbound").catch(() => []),
-          api.get<FBXInventoryT[]>("/fulfilment/inventory").catch(() => []),
-        ])
+        const data = await api.get<{
+          inbound: Record<string, number>
+          fbx_inventory: Record<string, number>
+        }>("/fulfilment/seller/dashboard")
         setStats({
-          totalInbound: inbound.length,
-          inTransit: inbound.filter((i) => i.status === "in_transit").length,
-          received: inbound.filter((i) => i.status === "received").length,
-          completed: inbound.filter((i) => i.status === "completed").length,
-          totalFbxUnits: inventory.reduce((sum, i) => sum + i.quantity, 0),
-          availableFbxUnits: inventory.reduce((sum, i) => sum + i.available_quantity, 0),
-          reservedFbxUnits: inventory.reduce((sum, i) => sum + i.reserved_quantity, 0),
+          totalInbound: data.inbound?.total ?? 0,
+          inTransit: data.inbound?.in_transit ?? 0,
+          received: data.inbound?.received ?? 0,
+          completed: data.inbound?.completed ?? 0,
+          totalFbxUnits: data.fbx_inventory?.total_units ?? 0,
+          availableFbxUnits: data.fbx_inventory?.available_units ?? 0,
+          reservedFbxUnits: data.fbx_inventory?.reserved_units ?? 0,
         })
       } catch {
         // API may not be ready
@@ -588,5 +596,310 @@ function SellerInventoryTab() {
         </Card>
       )}
     </div>
+  )
+}
+
+// ─── Stock Transfers Tab ──────────────────────────────────────────────────────
+
+type StockTransferT = {
+  id: string
+  reference: string
+  warehouse_id: string
+  warehouse_name: string | null
+  status: string
+  origin_address: string | null
+  expected_arrival_at: string | null
+  received_at: string | null
+  notes: string | null
+  rejection_reason: string | null
+  created_at: string
+  items: { id: string; product_id: string; expected_quantity: number; received_quantity: number; product_name: string | null }[]
+}
+
+const transferStatusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  draft: "outline",
+  requested: "secondary",
+  approved: "secondary",
+  in_transit: "secondary",
+  received: "default",
+  rejected: "destructive",
+  cancelled: "destructive",
+}
+
+function SellerTransfersTab() {
+  const [transfers, setTransfers] = React.useState<StockTransferT[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [statusFilter, setStatusFilter] = React.useState("all")
+  const [search, setSearch] = React.useState("")
+  const [dialogOpen, setDialogOpen] = React.useState(false)
+  const [viewTransfer, setViewTransfer] = React.useState<StockTransferT | null>(null)
+  const [warehouses, setWarehouses] = React.useState<WarehouseT[]>([])
+  const [products, setProducts] = React.useState<{ id: string; name: string }[]>([])
+
+  const load = React.useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (statusFilter !== "all") params.set("status", statusFilter)
+      const data = await api.get<{ results: StockTransferT[]; total: number }>(`/logistics/stock-transfers?${params}`)
+      setTransfers(data.results)
+    } catch (err) {
+      toast.add({ title: "Failed to load stock transfers", description: message(err), type: "error" })
+    } finally {
+      setLoading(false)
+    }
+  }, [statusFilter])
+
+  React.useEffect(() => {
+    load()
+    api.get<WarehouseT[]>("/fulfilment/warehouses").then(setWarehouses).catch(() => {})
+    api.get<{ results: { id: string; name: string }[] }>("/products/seller").then((d) => setProducts(d.results)).catch(() => {})
+  }, [load])
+
+  const filtered = transfers.filter((t) =>
+    !search || t.reference.toLowerCase().includes(search.toLowerCase()) || (t.warehouse_name ?? "").toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Search transfers..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "all")}>
+            <SelectTrigger className="w-[160px]"><SelectValue placeholder="All Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="requested">Requested</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="in_transit">In Transit</SelectItem>
+              <SelectItem value="received">Received</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button onClick={() => setDialogOpen(true)}><Plus className="size-4" /> New Transfer</Button>
+      </div>
+
+      {loading ? (
+        <TableSkeleton rows={4} cols={5} />
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent>
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <ArrowRightLeft className="size-12 text-muted-foreground/50" />
+              <p className="text-sm font-medium">No stock transfers found</p>
+              <p className="text-xs text-muted-foreground">Request to transfer stock from your store to a Xerin warehouse.</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Warehouse</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Expected Arrival</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-mono text-sm">{t.reference}</TableCell>
+                    <TableCell className="text-sm">{t.warehouse_name ?? "—"}</TableCell>
+                    <TableCell className="text-sm">{t.items.length} item(s)</TableCell>
+                    <TableCell><Badge variant={transferStatusVariant[t.status] ?? "outline"}>{t.status}</Badge></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{t.expected_arrival_at ? new Date(t.expected_arrival_at).toLocaleDateString() : "—"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon-sm" title="View" onClick={() => setViewTransfer(t)}><Eye className="size-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {dialogOpen && (
+        <TransferDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          warehouses={warehouses}
+          products={products}
+          onSaved={load}
+        />
+      )}
+
+      {viewTransfer && (
+        <Dialog open={!!viewTransfer} onOpenChange={(o) => !o && setViewTransfer(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Transfer Details</DialogTitle>
+              <DialogDescription>{viewTransfer.reference}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div><div className="text-xs text-muted-foreground">Warehouse</div><div className="font-medium">{viewTransfer.warehouse_name ?? "—"}</div></div>
+                <div><div className="text-xs text-muted-foreground">Status</div><div className="font-medium"><Badge variant={transferStatusVariant[viewTransfer.status] ?? "outline"}>{viewTransfer.status}</Badge></div></div>
+                <div><div className="text-xs text-muted-foreground">Origin Address</div><div className="font-medium">{viewTransfer.origin_address ?? "—"}</div></div>
+                <div><div className="text-xs text-muted-foreground">Expected Arrival</div><div className="font-medium">{viewTransfer.expected_arrival_at ? new Date(viewTransfer.expected_arrival_at).toLocaleDateString() : "—"}</div></div>
+                {viewTransfer.rejection_reason && <div className="col-span-2"><div className="text-xs text-muted-foreground">Rejection Reason</div><div className="font-medium text-red-600">{viewTransfer.rejection_reason}</div></div>}
+                {viewTransfer.notes && <div className="col-span-2"><div className="text-xs text-muted-foreground">Notes</div><div className="font-medium">{viewTransfer.notes}</div></div>}
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium">Items</p>
+                <div className="space-y-2">
+                  {viewTransfer.items.map((item) => (
+                    <div key={item.id} className="flex justify-between rounded-lg border p-2 text-sm">
+                      <span>{item.product_name ?? item.product_id.slice(0, 8)}</span>
+                      <span className="text-muted-foreground">{item.received_quantity}/{item.expected_quantity} received</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  )
+}
+
+function TransferDialog({
+  open,
+  onOpenChange,
+  warehouses,
+  products,
+  onSaved,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  warehouses: WarehouseT[]
+  products: { id: string; name: string }[]
+  onSaved: () => void
+}) {
+  const [saving, setSaving] = React.useState(false)
+  const [warehouseId, setWarehouseId] = React.useState("")
+  const [originAddress, setOriginAddress] = React.useState("")
+  const [notes, setNotes] = React.useState("")
+  const [lineItems, setLineItems] = React.useState<{ product_id: string; expected_quantity: string }[]>([{ product_id: "", expected_quantity: "1" }])
+
+  const addLine = () => setLineItems((c) => [...c, { product_id: "", expected_quantity: "1" }])
+  const removeLine = (i: number) => setLineItems((c) => c.filter((_, idx) => idx !== i))
+  const updateLine = (i: number, field: "product_id" | "expected_quantity", value: string) =>
+    setLineItems((c) => c.map((item, idx) => (idx === i ? { ...item, [field]: value } : item)))
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!warehouseId) {
+      toast.add({ title: "Please select a warehouse", type: "warning" })
+      return
+    }
+    const validItems = lineItems.filter((i) => i.product_id && parseInt(i.expected_quantity) > 0)
+    if (validItems.length === 0) {
+      toast.add({ title: "Add at least one product", type: "warning" })
+      return
+    }
+    setSaving(true)
+    try {
+      await api.post("/logistics/stock-transfers", {
+        warehouse_id: warehouseId,
+        origin_address: originAddress || null,
+        notes: notes || null,
+        items: validItems.map((i) => ({
+          product_id: i.product_id,
+          expected_quantity: parseInt(i.expected_quantity),
+        })),
+      })
+      toast.add({ title: "Stock transfer request created", type: "success" })
+      onOpenChange(false)
+      onSaved()
+      setWarehouseId("")
+      setOriginAddress("")
+      setNotes("")
+      setLineItems([{ product_id: "", expected_quantity: "1" }])
+    } catch (err) {
+      toast.add({ title: "Failed to create transfer", description: message(err), type: "error" })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <form onSubmit={handleSave}>
+          <DialogHeader>
+            <DialogTitle>New Stock Transfer</DialogTitle>
+            <DialogDescription>Request to transfer stock from your store to a Xerin warehouse.</DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="py-4">
+            <Field>
+              <FieldLabel>Warehouse *</FieldLabel>
+              <Select value={warehouseId} onValueChange={(v) => setWarehouseId(v ?? "")}>
+                <SelectTrigger><SelectValue placeholder="Select warehouse..." /></SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>{w.name} — {w.region}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel>Origin Address</FieldLabel>
+              <Input value={originAddress} onChange={(e) => setOriginAddress(e.target.value)} placeholder="Your store address" />
+            </Field>
+            <div className="space-y-2">
+              <FieldLabel>Items</FieldLabel>
+              {lineItems.map((item, i) => (
+                <div key={i} className="flex gap-2">
+                  <Select value={item.product_id} onValueChange={(v) => updateLine(i, "product_id", v ?? "")}>
+                    <SelectTrigger className="flex-1"><SelectValue placeholder="Select product..." /></SelectTrigger>
+                    <SelectContent>
+                      {products.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={item.expected_quantity}
+                    onChange={(e) => updateLine(i, "expected_quantity", e.target.value)}
+                    className="w-24"
+                  />
+                  {lineItems.length > 1 && (
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(i)}>
+                      <span className="text-xs text-muted-foreground">Remove</span>
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={addLine}>
+                <Plus className="size-4" /> Add Item
+              </Button>
+            </div>
+            <Field>
+              <FieldLabel>Notes</FieldLabel>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes..." rows={2} />
+            </Field>
+          </FieldGroup>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button type="submit" loading={saving}>Create Transfer</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

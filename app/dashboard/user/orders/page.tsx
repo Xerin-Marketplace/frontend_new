@@ -64,8 +64,9 @@ type Order = {
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode }> = {
   pending: { label: "Pending", variant: "outline", icon: <Clock className="size-3" /> },
-  confirmed: { label: "Confirmed", variant: "secondary", icon: <CheckCircle2 className="size-3" /> },
+  paid: { label: "Paid", variant: "secondary", icon: <CheckCircle2 className="size-3" /> },
   processing: { label: "Processing", variant: "secondary", icon: <Clock className="size-3" /> },
+  received_at_hub: { label: "At Xerin Hub", variant: "secondary", icon: <Package className="size-3" /> },
   shipped: { label: "Shipped", variant: "secondary", icon: <Truck className="size-3" /> },
   delivered: { label: "Delivered", variant: "default", icon: <CheckCircle2 className="size-3" /> },
   cancelled: { label: "Cancelled", variant: "destructive", icon: <XCircle className="size-3" /> },
@@ -95,7 +96,7 @@ export default function UserOrdersPage() {
     if (search) {
       const term = search.toLowerCase()
       result = result.filter((o) =>
-        formatOrderRef(o.id, o.created_at).toLowerCase().includes(term) ||
+        (o.order_number ?? formatOrderRef(o.id, o.created_at)).toLowerCase().includes(term) ||
         (o.order_number ?? o.id).toLowerCase().includes(term) ||
         o.items.some((i) => i.product_name?.toLowerCase().includes(term))
       )
@@ -115,7 +116,7 @@ export default function UserOrdersPage() {
     }
     return {
       total: orders.length,
-      active: (counts.pending || 0) + (counts.confirmed || 0) + (counts.processing || 0) + (counts.shipped || 0),
+      active: (counts.pending || 0) + (counts.paid || 0) + (counts.processing || 0) + (counts.received_at_hub || 0) + (counts.shipped || 0),
       delivered: counts.delivered || 0,
       spent: total,
     }
@@ -187,7 +188,7 @@ export default function UserOrdersPage() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold">{formatOrderRef(order.id, order.created_at)}</span>
+                        <span className="font-semibold">{order.order_number ?? formatOrderRef(order.id, order.created_at)}</span>
                         <Badge variant={cfg.variant} className="flex items-center gap-1">
                           {cfg.icon}
                           {cfg.label}
@@ -235,7 +236,7 @@ export default function UserOrdersPage() {
           {viewOrder && (
             <>
               <DialogHeader>
-                <DialogTitle>Order Details — {formatOrderRef(viewOrder.id, viewOrder.created_at)}</DialogTitle>
+                <DialogTitle>Order Details — {viewOrder.order_number ?? formatOrderRef(viewOrder.id, viewOrder.created_at)}</DialogTitle>
                 <DialogDescription>Placed on {new Date(viewOrder.created_at).toLocaleString()}</DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-4">

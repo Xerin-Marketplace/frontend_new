@@ -118,7 +118,7 @@ export default function UserAnalyticsPage() {
   const totalOrders = orders.length
   const totalSpent = orders.reduce((sum, o) => sum + Number(o.total_amount), 0)
   const deliveredCount = orders.filter((o) => o.status === "delivered").length
-  const pendingDeliveries = orders.filter((o) => o.status === "shipped" || o.status === "processing" || o.status === "confirmed").length
+  const pendingDeliveries = orders.filter((o) => o.status === "shipped" || o.status === "processing" || o.status === "paid" || o.status === "received_at_hub").length
   const avgOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0
 
   // Group orders by month for spending trend

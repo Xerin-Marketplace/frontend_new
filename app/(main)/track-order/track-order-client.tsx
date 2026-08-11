@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Package, Search, Truck, CheckCircle2, Clock, MapPin, ShoppingBag, AlertCircle, XCircle, Phone, Mail } from "lucide-react"
+import { Package, Search, Truck, CheckCircle2, Clock, MapPin, ShoppingBag, AlertCircle, XCircle, Phone, Mail, Store } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 import Link from "next/link"
@@ -12,11 +12,12 @@ const statusSteps = [
   { key: "pending", label: "Order Confirmed", icon: ShoppingBag, description: "Your order has been received and confirmed" },
   { key: "paid", label: "Payment Verified", icon: CheckCircle2, description: "Payment has been verified and seller notified" },
   { key: "processing", label: "Seller Preparing", icon: Package, description: "The seller is preparing your order for dispatch" },
+  { key: "received_at_hub", label: "Received at Xerin Hub", icon: CheckCircle2, description: "Your order has arrived at the Xerin fulfilment centre" },
   { key: "shipped", label: "Out for Delivery", icon: Truck, description: "Your order is on the way via Xerin Express" },
   { key: "delivered", label: "Delivered", icon: MapPin, description: "Order has been delivered successfully" },
 ]
 
-const statusOrder = ["pending", "paid", "processing", "shipped", "delivered"]
+const statusOrder = ["pending", "paid", "processing", "received_at_hub", "shipped", "delivered"]
 
 const cancelledStatuses = ["cancelled", "refunded"]
 
@@ -39,6 +40,7 @@ function formatPrice(price: number | string) {
 interface OrderItem {
   id: string
   product_id: string
+  seller_id: string
   product_name: string
   quantity: number
   unit_price: string | number
@@ -53,8 +55,30 @@ interface StatusHistory {
   created_at: string
 }
 
+interface ShipmentData {
+  id: string
+  seller_id: string
+  status: string
+  carrier_name: string | null
+  tracking_number: string | null
+  estimated_delivery_from: string | null
+  estimated_delivery_to: string | null
+  dispatched_at: string | null
+  delivered_at: string | null
+  tracking_events: { id: string; status: string; notes: string | null; created_at: string }[]
+}
+
+interface SellerOrderData {
+  id: string
+  seller_id: string
+  status: string
+  seller_subtotal: string | number
+  item_count: number
+}
+
 interface OrderData {
   id: string
+  order_number: string | null
   status: string
   shipping_method_name: string | null
   shipping_carrier: string | null
@@ -66,6 +90,8 @@ interface OrderData {
   total: string | number
   items: OrderItem[]
   status_history: StatusHistory[]
+  shipments: ShipmentData[]
+  seller_orders: SellerOrderData[]
   created_at: string
   updated_at: string | null
 }
@@ -85,12 +111,18 @@ export default function TrackOrderClient() {
     setOrder(null)
 
     try {
-      const data = await api.get<typeof order>(`/orders/${orderId.trim()}`)
+      const ref = orderId.trim().toUpperCase()
+      let data: typeof order
+      if (/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(ref)) {
+        data = await api.get<typeof order>(`/orders/${ref}`)
+      } else {
+        data = await api.get<typeof order>(`/orders/ref/${encodeURIComponent(ref)}`)
+      }
       setOrder(data)
     } catch (err) {
       const e = err as ApiError
       if (e?.status === 404) {
-        setError("Order not found. Please check your Order ID and try again.")
+        setError("Order not found. Please check your Order Reference and try again.")
       } else if (e?.status === 401 || e?.status === 403) {
         setError("Please log in to track your order.")
       } else if (e?.code === "NETWORK_ERROR" || e?.code === "TIMEOUT") {
@@ -115,7 +147,7 @@ export default function TrackOrderClient() {
         </div>
         <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Track Your Order</h1>
         <p className="max-w-lg text-base text-muted-foreground">
-          Enter your Order ID below to see real-time tracking status and delivery updates.
+          Enter your Order Reference below to see real-time tracking status and delivery updates.
         </p>
       </div>
 
@@ -169,7 +201,7 @@ export default function TrackOrderClient() {
           <div className="flex items-center justify-between rounded-xl border bg-card p-5">
             <div className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Order Reference</span>
-              <span className="font-mono text-sm font-medium">{formatOrderRef(order.id, order.created_at)}</span>
+              <span className="font-mono text-sm font-medium">{order.order_number ?? formatOrderRef(order.id, order.created_at)}</span>
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="text-xs text-muted-foreground">Order Date</span>
@@ -281,34 +313,136 @@ export default function TrackOrderClient() {
             </div>
           )}
 
-          {/* Order Items */}
-          <div className="rounded-2xl border bg-card p-6">
-            <h2 className="mb-4 text-lg font-bold">Order Items ({order.items.length})</h2>
+          {/* Per-Seller Tracking */}
+          {order.seller_orders && order.seller_orders.length > 0 && (
             <div className="flex flex-col gap-4">
-              {order.items.map((item) => (
-                <div key={item.id} className="flex items-center gap-4 border-b pb-4 last:border-0 last:pb-0">
-                  <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={item.product_name} className="size-full object-cover" />
-                    ) : (
-                      <div className="flex size-full items-center justify-center">
-                        <Package className="size-6 text-muted-foreground" />
+              {order.seller_orders.map((so) => {
+                const sellerItems = order.items.filter((i) => i.seller_id === so.seller_id)
+                const shipment = order.shipments?.find((s) => s.seller_id === so.seller_id)
+                const sellerStatusLabels: Record<string, string> = {
+                  new: "New Order",
+                  accepted: "Accepted",
+                  processing: "Preparing",
+                  ready_to_ship: "Ready for Dispatch",
+                  shipped: "Shipped",
+                  delivered: "Delivered",
+                  cancellation_requested: "Cancellation Requested",
+                  cancelled: "Cancelled",
+                }
+                const sellerStatusColors: Record<string, string> = {
+                  new: "text-amber-600",
+                  accepted: "text-blue-600",
+                  processing: "text-blue-600",
+                  ready_to_ship: "text-purple-600",
+                  shipped: "text-purple-600",
+                  delivered: "text-green-600",
+                  cancellation_requested: "text-red-600",
+                  cancelled: "text-red-600",
+                }
+                return (
+                  <div key={so.id} className="rounded-2xl border bg-card p-6">
+                    {/* Seller header */}
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Store className="size-5 text-muted-foreground" />
+                        <span className="text-sm font-semibold">Seller {so.seller_id.slice(0, 8)}</span>
+                        <span className="text-xs text-muted-foreground">· {so.item_count} {so.item_count === 1 ? "item" : "items"}</span>
+                      </div>
+                      <span className={cn("text-sm font-semibold", sellerStatusColors[so.status] ?? "text-muted-foreground")}>
+                        {sellerStatusLabels[so.status] ?? so.status}
+                      </span>
+                    </div>
+
+                    {/* Seller items */}
+                    <div className="flex flex-col gap-3">
+                      {sellerItems.map((item) => (
+                        <div key={item.id} className="flex items-center gap-4 border-b pb-3 last:border-0 last:pb-0">
+                          <div className="size-14 shrink-0 overflow-hidden rounded-lg bg-muted">
+                            {item.image_url ? (
+                              <img src={item.image_url} alt={item.product_name} className="size-full object-cover" />
+                            ) : (
+                              <div className="flex size-full items-center justify-center">
+                                <Package className="size-5 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-1 flex-col gap-0.5">
+                            <span className="text-sm font-medium">{item.product_name}</span>
+                            <span className="text-xs text-muted-foreground">Qty: {item.quantity}</span>
+                          </div>
+                          <span className="text-sm font-medium">{formatPrice(item.total)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Shipment tracking for this seller */}
+                    {shipment && (
+                      <div className="mt-4 rounded-lg border bg-muted/30 p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Truck className="size-4 text-muted-foreground" />
+                            <span className="text-xs font-medium">{shipment.carrier_name ?? "Carrier"}</span>
+                            {shipment.tracking_number && (
+                              <span className="text-xs text-muted-foreground">· {shipment.tracking_number}</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {shipment.estimated_delivery_from && `ETA: ${formatDate(shipment.estimated_delivery_from)}`}
+                          </span>
+                        </div>
+                        {shipment.tracking_events && shipment.tracking_events.length > 0 && (
+                          <div className="mt-2 flex flex-col gap-1">
+                            {shipment.tracking_events.slice(-3).reverse().map((ev) => (
+                              <div key={ev.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Clock className="size-3 shrink-0" />
+                                <span className="font-medium">{ev.status}</span>
+                                {ev.notes && <span>— {ev.notes}</span>}
+                                <span>· {formatDate(ev.created_at)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-1 flex-col gap-1">
-                    <span className="text-sm font-semibold">{item.product_name}</span>
-                    <span className="text-xs text-muted-foreground">Qty: {item.quantity}</span>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-sm font-medium">{formatPrice(item.unit_price)}</span>
-                    <span className="text-xs text-muted-foreground">Total: {formatPrice(item.total)}</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
-            {/* Order Total */}
-            <div className="mt-4 flex items-center justify-between border-t pt-4">
+          )}
+
+          {/* Fallback: Order Items (when no seller_orders in response) */}
+          {(!order.seller_orders || order.seller_orders.length === 0) && (
+            <div className="rounded-2xl border bg-card p-6">
+              <h2 className="mb-4 text-lg font-bold">Order Items ({order.items.length})</h2>
+              <div className="flex flex-col gap-4">
+                {order.items.map((item) => (
+                  <div key={item.id} className="flex items-center gap-4 border-b pb-4 last:border-0 last:pb-0">
+                    <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.product_name} className="size-full object-cover" />
+                      ) : (
+                        <div className="flex size-full items-center justify-center">
+                          <Package className="size-6 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-1 flex-col gap-1">
+                      <span className="text-sm font-semibold">{item.product_name}</span>
+                      <span className="text-xs text-muted-foreground">Qty: {item.quantity}</span>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-sm font-medium">{formatPrice(item.unit_price)}</span>
+                      <span className="text-xs text-muted-foreground">Total: {formatPrice(item.total)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Order Total */}
+          <div className="rounded-2xl border bg-card p-6">
+            <div className="flex items-center justify-between border-t pt-4">
               <span className="text-sm font-semibold">Order Total</span>
               <div className="flex flex-col items-end gap-1">
                 <span className="text-lg font-bold text-primary">{formatPrice(order.total)}</span>

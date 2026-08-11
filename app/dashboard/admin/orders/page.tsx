@@ -32,6 +32,7 @@ import {
   ShoppingBag,
   Search,
   Eye,
+  Store,
 } from "lucide-react"
 import { api, type ApiError } from "@/lib/api"
 import { formatOrderRef } from "@/lib/store-types"
@@ -40,6 +41,7 @@ import { PageSkeleton, TableSkeleton } from "@/components/skeletons"
 type OrderItem = {
   id: string
   product_id: string
+  seller_id: string
   product_name: string
   quantity: number
   unit_price: number
@@ -53,8 +55,27 @@ type OrderStatusHistory = {
   created_at: string
 }
 
+type SellerOrderInfo = {
+  id: string
+  seller_id: string
+  status: string
+  seller_subtotal: number
+  item_count: number
+}
+
+type ShipmentInfo = {
+  id: string
+  seller_id: string
+  status: string
+  carrier_name: string | null
+  tracking_number: string | null
+  dispatched_at: string | null
+  delivered_at: string | null
+}
+
 type Order = {
   id: string
+  order_number: string | null
   user_id: string
   status: string
   currency: string
@@ -67,6 +88,8 @@ type Order = {
   notes: string | null
   items: OrderItem[]
   status_history: OrderStatusHistory[]
+  seller_orders: SellerOrderInfo[]
+  shipments: ShipmentInfo[]
   created_at: string
   updated_at: string | null
 }
@@ -80,8 +103,9 @@ type PaginatedOrders = {
 
 const orderStatusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending: { label: "Pending", variant: "outline" },
-  confirmed: { label: "Confirmed", variant: "secondary" },
+  paid: { label: "Paid", variant: "secondary" },
   processing: { label: "Processing", variant: "secondary" },
+  received_at_hub: { label: "At Xerin Hub", variant: "secondary" },
   shipped: { label: "Shipped", variant: "secondary" },
   delivered: { label: "Delivered", variant: "default" },
   cancelled: { label: "Cancelled", variant: "destructive" },
@@ -148,7 +172,7 @@ export default function AdminOrdersPage() {
   const filteredOrders = React.useMemo(() => {
     if (!search) return orders
     const term = search.toLowerCase()
-    return orders.filter((o) => o.id.toLowerCase().includes(term) || o.user_id.toLowerCase().includes(term))
+    return orders.filter((o) => (o.order_number ?? o.id).toLowerCase().includes(term) || o.user_id.toLowerCase().includes(term))
   }, [orders, search])
 
   const totalPages = Math.ceil(total / pageSize)
@@ -176,7 +200,7 @@ export default function AdminOrdersPage() {
             </CardTitle>
             <div className="flex gap-2">
               <Input
-                placeholder="Search by order ID..."
+                placeholder="Search by order ref..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -192,7 +216,7 @@ export default function AdminOrdersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order ID</TableHead>
+                <TableHead>Order Ref</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
@@ -208,7 +232,7 @@ export default function AdminOrdersPage() {
               ) : (
                 filteredOrders.map((o) => (
                   <TableRow key={o.id}>
-                    <TableCell className="font-mono text-xs">{formatOrderRef(o.id, o.created_at)}</TableCell>
+                    <TableCell className="font-mono text-xs">{o.order_number ?? formatOrderRef(o.id, o.created_at)}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{o.user_id.slice(0, 8)}</TableCell>
                     <TableCell className="font-medium">{formatPrice(Number(o.total))}</TableCell>
                     <TableCell>
@@ -245,7 +269,7 @@ export default function AdminOrdersPage() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Order Details</DialogTitle>
-            <DialogDescription>Order Reference: {viewOrder ? formatOrderRef(viewOrder.id, viewOrder.created_at) : ""}</DialogDescription>
+            <DialogDescription>Order Reference: {viewOrder ? (viewOrder.order_number ?? formatOrderRef(viewOrder.id, viewOrder.created_at)) : ""}</DialogDescription>
           </DialogHeader>
           {viewOrder && (
             <div className="flex flex-col gap-4">
@@ -259,17 +283,55 @@ export default function AdminOrdersPage() {
               </div>
 
               <div>
-                <h4 className="mb-2 text-sm font-medium">Items</h4>
-                <div className="flex flex-col gap-2">
-                  {viewOrder.items.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
-                      <div>
-                        <div className="font-medium">{item.product_name}</div>
-                        <div className="text-xs text-muted-foreground">Qty: {item.quantity} x {formatPrice(Number(item.unit_price))}</div>
-                      </div>
-                      <div className="font-medium">{formatPrice(Number(item.total_price))}</div>
+                <h4 className="mb-2 text-sm font-medium">Seller Breakdown</h4>
+                <div className="flex flex-col gap-3">
+                  {(viewOrder.seller_orders ?? []).length > 0 ? (
+                    viewOrder.seller_orders.map((so) => {
+                      const sellerItems = viewOrder.items.filter((i) => i.seller_id === so.seller_id)
+                      const shipment = viewOrder.shipments?.find((s) => s.seller_id === so.seller_id)
+                      return (
+                        <div key={so.id} className="rounded-lg border p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Store className="size-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">Seller {so.seller_id.slice(0, 8)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">{so.status}</Badge>
+                              <span className="text-sm font-medium">{formatPrice(Number(so.seller_subtotal))}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            {sellerItems.map((item) => (
+                              <div key={item.id} className="flex items-center justify-between text-xs">
+                                <span>{item.product_name} × {item.quantity}</span>
+                                <span className="text-muted-foreground">{formatPrice(Number(item.total_price))}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {shipment && (
+                            <div className="mt-2 flex items-center gap-2 border-t pt-2 text-xs text-muted-foreground">
+                              <Badge variant="secondary">{shipment.status}</Badge>
+                              {shipment.tracking_number && <span>· {shipment.tracking_number}</span>}
+                              {shipment.carrier_name && <span>· {shipment.carrier_name}</span>}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {viewOrder.items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                          <div>
+                            <div className="font-medium">{item.product_name}</div>
+                            <div className="text-xs text-muted-foreground">Qty: {item.quantity} × {formatPrice(Number(item.unit_price))}</div>
+                          </div>
+                          <div className="font-medium">{formatPrice(Number(item.total_price))}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 

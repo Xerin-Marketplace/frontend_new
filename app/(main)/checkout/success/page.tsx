@@ -16,6 +16,7 @@ import { formatOrderRef } from "@/lib/store-types"
 export default function CheckoutSuccessPage() {
   const searchParams = useSearchParams()
   const orderId = searchParams.get("order_id")
+  const orderRef = searchParams.get("ref")
   const paymentId = searchParams.get("payment_id")
 
   return (
@@ -49,7 +50,7 @@ export default function CheckoutSuccessPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Order Reference</p>
-                  <p className="text-sm font-semibold">{formatOrderRef(orderId)}</p>
+                  <p className="text-sm font-semibold">{orderRef || (orderId ? formatOrderRef(orderId) : "")}</p>
                 </div>
               </div>
             </div>

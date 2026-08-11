@@ -75,8 +75,9 @@ type Order = {
 
 const statusConfig: Record<string, { variant: "default" | "secondary" | "outline" | "destructive"; icon: React.ReactNode; label: string }> = {
   pending: { variant: "outline", icon: <Clock className="size-3" />, label: "Pending" },
-  confirmed: { variant: "secondary", icon: <CheckCircle2 className="size-3" />, label: "Confirmed" },
+  paid: { variant: "secondary", icon: <CheckCircle2 className="size-3" />, label: "Paid" },
   processing: { variant: "secondary", icon: <Clock className="size-3" />, label: "Processing" },
+  received_at_hub: { variant: "secondary", icon: <CheckCircle2 className="size-3" />, label: "At Xerin Hub" },
   shipped: { variant: "secondary", icon: <Truck className="size-3" />, label: "Shipped" },
   delivered: { variant: "default", icon: <CheckCircle2 className="size-3" />, label: "Delivered" },
   cancelled: { variant: "destructive", icon: <Clock className="size-3" />, label: "Cancelled" },

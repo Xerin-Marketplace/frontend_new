@@ -158,6 +158,7 @@ const adminData = {
       title: "Logistics",
       url: "/dashboard/admin/logistics",
       icon: Bike,
+      isActive: true,
       items: [
         { title: "Overview", url: "/dashboard/admin/logistics" },
         { title: "Drivers", url: "/dashboard/admin/logistics/drivers" },

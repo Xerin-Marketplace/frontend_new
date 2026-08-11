@@ -11,6 +11,7 @@ import {
   Settings,
   FileCheck,
   Boxes,
+  Warehouse,
   type LucideIcon,
 } from "lucide-react"
 
@@ -116,6 +117,16 @@ const sellerData = {
         { title: "Methods", url: "/dashboard/seller/shipping/methods" },
         { title: "Rates", url: "/dashboard/seller/shipping/rates" },
         { title: "Shipments", url: "/dashboard/seller/shipping/shipments" },
+      ],
+    },
+    {
+      title: "Fulfilment",
+      url: "/dashboard/seller/fulfilment",
+      icon: Warehouse,
+      items: [
+        { title: "Overview", url: "/dashboard/seller/fulfilment" },
+        { title: "Inbound Shipments", url: "/dashboard/seller/fulfilment/inbound" },
+        { title: "FBX Inventory", url: "/dashboard/seller/fulfilment/inventory" },
       ],
     },
     {

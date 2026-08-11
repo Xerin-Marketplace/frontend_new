@@ -20,6 +20,7 @@ import {
   TicketPercent,
   Truck,
   Boxes,
+  Warehouse,
   ShieldAlert,
   type LucideIcon,
 } from "lucide-react"
@@ -138,6 +139,17 @@ const adminData = {
       items: [{ title: "Shipping Operations", url: "/dashboard/admin/shipping" }],
     },
     {
+      title: "Fulfilment",
+      url: "/dashboard/admin/fulfilment",
+      icon: Warehouse,
+      items: [
+        { title: "Overview", url: "/dashboard/admin/fulfilment" },
+        { title: "Warehouses", url: "/dashboard/admin/fulfilment/warehouses" },
+        { title: "Inbound Shipments", url: "/dashboard/admin/fulfilment/inbound" },
+        { title: "Pick Lists", url: "/dashboard/admin/fulfilment/picklists" },
+      ],
+    },
+    {
       title: "Wallets",
       url: "/dashboard/admin/wallets",
       icon: Wallet,
@@ -220,6 +232,7 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
     Commissions: "commissions:read",
     Coupons: "coupons:read",
     Shipping: "shipping:read",
+    Fulfilment: "inventory:manage",
     Wallets: "wallet:read",
     Refunds: "refunds:read",
     Settings: null,

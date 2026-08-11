@@ -183,7 +183,8 @@ type Reconciliation = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatPrice(price: number): string {
-  return `TSh ${Number(price).toLocaleString()}`
+  const n = Number(price)
+  return `TSh ${Number.isNaN(n) ? 0 : n.toLocaleString()}`
 }
 
 function getApiError(err: unknown): string {
@@ -358,7 +359,7 @@ export default function AdminAnalyticsPage() {
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Gross Sales</CardTitle>
             <div className="flex size-8 items-center justify-center rounded-lg bg-chart-1/10">
-              <TShIcon className="text-xs text-chart-1" />
+              <TrendingUp className="size-4 text-chart-1" />
             </div>
           </CardHeader>
           <CardContent>
@@ -424,7 +425,9 @@ export default function AdminAnalyticsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Avg Order Value</CardTitle>
-            <TShIcon className="text-xs text-muted-foreground" />
+            <div className="flex size-8 items-center justify-center rounded-lg bg-chart-4/10">
+              <TrendingUp className="size-4 text-chart-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">{formatPrice(Number(overview?.average_order_value ?? 0))}</div>
@@ -451,7 +454,9 @@ export default function AdminAnalyticsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Pending Payouts</CardTitle>
-            <Wallet className="size-4 text-muted-foreground" />
+            <div className="flex size-8 items-center justify-center rounded-lg bg-amber-500/10">
+              <Wallet className="size-4 text-amber-600" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">{formatPrice(Number(overview?.pending_payout_amount ?? 0))}</div>
@@ -468,7 +473,12 @@ export default function AdminAnalyticsPage() {
           </CardHeader>
           <CardContent>
             {chartData.length === 0 ? (
-              <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">No sales data available.</div>
+              <div className="flex h-[300px] flex-col items-center justify-center gap-3 text-muted-foreground">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted/50">
+                  <TrendingUp className="size-5 text-muted-foreground/50" />
+                </div>
+                <p className="text-sm">No sales data available for this period.</p>
+              </div>
             ) : (
               <ChartContainer config={salesChartConfig} className="h-[300px] w-full">
                 <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
@@ -502,7 +512,12 @@ export default function AdminAnalyticsPage() {
           </CardHeader>
           <CardContent>
             {orderDistribution.length === 0 ? (
-              <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">No order data available.</div>
+              <div className="flex h-[300px] flex-col items-center justify-center gap-3 text-muted-foreground">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted/50">
+                  <ShoppingBag className="size-5 text-muted-foreground/50" />
+                </div>
+                <p className="text-sm">No order data available.</p>
+              </div>
             ) : (
               <ChartContainer config={pieConfig} className="mx-auto h-[300px]">
                 <PieChart>
@@ -529,7 +544,12 @@ export default function AdminAnalyticsPage() {
           </CardHeader>
           <CardContent>
             {chartData.length === 0 ? (
-              <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">No data available.</div>
+              <div className="flex h-[250px] flex-col items-center justify-center gap-3 text-muted-foreground">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted/50">
+                  <ShoppingBag className="size-5 text-muted-foreground/50" />
+                </div>
+                <p className="text-sm">No data available for this period.</p>
+              </div>
             ) : (
               <ChartContainer config={salesChartConfig} className="h-[250px] w-full">
                 <BarChart data={chartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
@@ -558,7 +578,12 @@ export default function AdminAnalyticsPage() {
           </CardHeader>
           <CardContent>
             {revenueBreakdown.length === 0 ? (
-              <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">No revenue data available.</div>
+              <div className="flex h-[250px] flex-col items-center justify-center gap-3 text-muted-foreground">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted/50">
+                  <Wallet className="size-5 text-muted-foreground/50" />
+                </div>
+                <p className="text-sm">No revenue data available.</p>
+              </div>
             ) : (
               <ChartContainer config={pieConfig} className="mx-auto h-[250px]">
                 <PieChart>
@@ -656,38 +681,38 @@ export default function AdminAnalyticsPage() {
             <CardDescription>Platform financial breakdown — {rangeLabel}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border p-4">
-                <p className="text-xs text-muted-foreground">Gross Sales</p>
-                <p className="mt-1 text-lg font-bold">{formatPrice(Number(reconciliation.gross_sales))}</p>
+            <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border bg-card/50 p-4 transition-colors hover:bg-muted/20">
+                <p className="text-xs font-medium text-muted-foreground">Gross Sales</p>
+                <p className="mt-1 text-lg font-bold">{formatPrice(Number(reconciliation.gross_sales ?? 0))}</p>
               </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-xs text-muted-foreground">Commission Revenue</p>
-                <p className="mt-1 text-lg font-bold text-green-600">{formatPrice(Number(reconciliation.commission_revenue))}</p>
+              <div className="rounded-xl border bg-card/50 p-4 transition-colors hover:bg-muted/20">
+                <p className="text-xs font-medium text-muted-foreground">Commission Revenue</p>
+                <p className="mt-1 text-lg font-bold text-green-600">{formatPrice(Number(reconciliation.commission_revenue ?? 0))}</p>
               </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-xs text-muted-foreground">Seller Net Earnings</p>
-                <p className="mt-1 text-lg font-bold">{formatPrice(Number(reconciliation.seller_net_earnings))}</p>
+              <div className="rounded-xl border bg-card/50 p-4 transition-colors hover:bg-muted/20">
+                <p className="text-xs font-medium text-muted-foreground">Seller Net Earnings</p>
+                <p className="mt-1 text-lg font-bold">{formatPrice(Number(reconciliation.seller_net_earnings ?? 0))}</p>
               </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-xs text-muted-foreground">Refunds Completed</p>
-                <p className="mt-1 text-lg font-bold text-red-500">{formatPrice(Number(reconciliation.refunds_completed))}</p>
+              <div className="rounded-xl border bg-card/50 p-4 transition-colors hover:bg-muted/20">
+                <p className="text-xs font-medium text-muted-foreground">Refunds Completed</p>
+                <p className="mt-1 text-lg font-bold text-red-500">{formatPrice(Number(reconciliation.refunds_completed ?? 0))}</p>
               </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-xs text-muted-foreground">Payouts Completed</p>
-                <p className="mt-1 text-lg font-bold">{formatPrice(Number(reconciliation.payouts_completed))}</p>
+              <div className="rounded-xl border bg-card/50 p-4 transition-colors hover:bg-muted/20">
+                <p className="text-xs font-medium text-muted-foreground">Payouts Completed</p>
+                <p className="mt-1 text-lg font-bold">{formatPrice(Number(reconciliation.payouts_completed ?? 0))}</p>
               </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-xs text-muted-foreground">Pending Wallet Balance</p>
-                <p className="mt-1 text-lg font-bold text-amber-600">{formatPrice(Number(reconciliation.pending_wallet_balance))}</p>
+              <div className="rounded-xl border bg-card/50 p-4 transition-colors hover:bg-muted/20">
+                <p className="text-xs font-medium text-muted-foreground">Pending Wallet Balance</p>
+                <p className="mt-1 text-lg font-bold text-amber-600">{formatPrice(Number(reconciliation.pending_wallet_balance ?? 0))}</p>
               </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-xs text-muted-foreground">Available Wallet Balance</p>
-                <p className="mt-1 text-lg font-bold">{formatPrice(Number(reconciliation.available_wallet_balance))}</p>
+              <div className="rounded-xl border bg-card/50 p-4 transition-colors hover:bg-muted/20">
+                <p className="text-xs font-medium text-muted-foreground">Available Wallet Balance</p>
+                <p className="mt-1 text-lg font-bold">{formatPrice(Number(reconciliation.available_wallet_balance ?? 0))}</p>
               </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-xs text-muted-foreground">Pending Payout Amount</p>
-                <p className="mt-1 text-lg font-bold text-amber-600">{formatPrice(Number(reconciliation.pending_payout_amount))}</p>
+              <div className="rounded-xl border bg-card/50 p-4 transition-colors hover:bg-muted/20">
+                <p className="text-xs font-medium text-muted-foreground">Pending Payout Amount</p>
+                <p className="mt-1 text-lg font-bold text-amber-600">{formatPrice(Number(reconciliation.pending_payout_amount ?? 0))}</p>
               </div>
             </div>
           </CardContent>
@@ -716,7 +741,12 @@ export default function AdminAnalyticsPage() {
             <TableBody>
               {topSellers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">No seller data for this period.</TableCell>
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center gap-2">
+                      <Store className="size-5 text-muted-foreground/30" />
+                      <span>No seller data for this period.</span>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ) : (
                 topSellers.map((s, idx) => (
@@ -761,7 +791,12 @@ export default function AdminAnalyticsPage() {
             <TableBody>
               {topProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No product data for this period.</TableCell>
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center gap-2">
+                      <Package className="size-5 text-muted-foreground/30" />
+                      <span>No product data for this period.</span>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ) : (
                 topProducts.map((p, idx) => (

@@ -7,6 +7,7 @@ import { CartProvider } from "@/lib/cart-context";
 import { WishlistProvider } from "@/lib/wishlist-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toast";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -55,6 +56,7 @@ export default function RootLayout({
           </AuthProvider>
           <Toaster />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );

@@ -103,7 +103,8 @@ type AnalyticsRankingRow = {
 }
 
 function formatPrice(price: number): string {
-  return `TSh ${Number(price).toLocaleString()}`
+  const n = Number(price)
+  return `TSh ${Number.isNaN(n) ? 0 : n.toLocaleString()}`
 }
 
 function getApiError(err: unknown): string {

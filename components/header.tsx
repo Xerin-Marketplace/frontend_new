@@ -41,6 +41,7 @@ export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [greeting, setGreeting] = useState<string | null>(null)
   const profileRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { user, isAuthenticated, logout } = useAuth()
@@ -55,6 +56,20 @@ export function Header() {
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    const updateGreeting = () => {
+      const hour = new Date().getHours()
+      if (hour >= 5 && hour < 12) setGreeting("Good morning")
+      else if (hour >= 12 && hour < 17) setGreeting("Good afternoon")
+      else if (hour >= 17 && hour < 21) setGreeting("Good evening")
+      else setGreeting("Good night")
+    }
+
+    updateGreeting()
+    const timer = window.setInterval(updateGreeting, 60_000)
+    return () => window.clearInterval(timer)
   }, [])
 
   const handleLogout = async () => {
@@ -85,8 +100,25 @@ export function Header() {
         </div>
       </div>
 
+      {/* Time-aware mobile session greeting */}
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 pb-1 pt-3 md:hidden">
+        <div className="min-w-0">
+          <p className="h-4 text-xs text-muted-foreground" aria-live="polite">
+            {greeting ? `${greeting} 👋` : ""}
+          </p>
+          {isAuthenticated && user ? (
+            <p className="truncate text-base font-semibold">{user.first_name || "Welcome back"}</p>
+          ) : (
+            <Link href="/auth" className="text-base font-semibold hover:text-primary">Guest</Link>
+          )}
+        </div>
+        {!isAuthenticated && (
+          <Link href="/auth" className="text-xs font-medium text-primary hover:underline">Sign in</Link>
+        )}
+      </div>
+
       {/* Main header */}
-      <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5 md:gap-6 md:px-4 md:py-3">
+      <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 pb-2.5 pt-1 md:gap-6 md:px-4 md:py-3">
         {/* Mobile menu button */}
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger

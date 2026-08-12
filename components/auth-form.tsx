@@ -127,13 +127,14 @@ function AuthFormInner({
   const [sellerPassword, setSellerPassword] = useState("")
   const [sellerAgreement, setSellerAgreement] = useState(false)
   const [categories, setCategories] = useState<BusinessCategory[]>([])
-  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [categoriesLoading, setCategoriesLoading] = useState(false)
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([])
   const [categoryError, setCategoryError] = useState(false)
   const [sellerErrors, setSellerErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    if (mode === "seller" && !categoriesLoading && categories.length === 0 && !categoryError) {
+    if (mode === "seller" && categories.length === 0 && !categoryError) {
+      setCategoriesLoading(true)
       api.get<BusinessCategory[]>("/admin/business-categories")
         .then((data) => {
           setCategories(data)
@@ -145,7 +146,7 @@ function AuthFormInner({
         })
         .finally(() => setCategoriesLoading(false))
     }
-  }, [mode, categories.length, categoriesLoading, categoryError])
+  }, [mode, categories.length, categoryError])
 
   const toggleCategory = (id: string) => {
     setSelectedCategoryIds((prev) =>

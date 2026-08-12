@@ -16,6 +16,58 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { api, type ApiError } from "@/lib/api"
 import { toast } from "@/components/ui/toast"
 import type { ApiProduct, ApiCategory } from "@/lib/store-types"
+import { useAuth } from "@/lib/auth-context"
+
+type DiscoveryResponse = { total: number; results: Array<{
+  id: string
+  seller_id: string
+  category_id: string
+  brand_id: string | null
+  name: string
+  slug: string
+  price: number
+  sale_price: number | null
+  currency: string
+  primary_image_url: string | null
+}> }
+
+function toProduct(item: DiscoveryResponse["results"][number]): ApiProduct {
+  return {
+    ...item,
+    sku: "",
+    description: null,
+    weight: null,
+    status: "approved",
+    is_active: true,
+    created_at: "",
+    images: item.primary_image_url ? [{
+      id: `discovery-${item.id}`,
+      product_id: item.id,
+      image_url: item.primary_image_url,
+      thumbnail_url: item.primary_image_url,
+      alt_text: item.name,
+      is_primary: true,
+      display_order: 0,
+    }] : [],
+  }
+}
+
+function ProductSection({ title, products, href = "/products" }: { title: string; products: ApiProduct[]; href?: string }) {
+  if (products.length === 0) return null
+  return (
+    <section className="mt-10">
+      <div className="mb-5 flex items-center justify-between">
+        <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+        <Link href={href} className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+          View All <ArrowRight className="size-4" />
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-4">
+        {products.slice(0, 4).map((product) => <ProductCard key={`${title}-${product.id}`} product={product} />)}
+      </div>
+    </section>
+  )
+}
 
 function getApiError(err: unknown): string {
   const e = err as ApiError
@@ -23,12 +75,17 @@ function getApiError(err: unknown): string {
 }
 
 export default function Home() {
+  const { isAuthenticated } = useAuth()
   const [activeCat, setActiveCat] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [products, setProducts] = useState<ApiProduct[]>([])
   const [categories, setCategories] = useState<ApiCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [newArrivals, setNewArrivals] = useState<ApiProduct[]>([])
+  const [trending, setTrending] = useState<ApiProduct[]>([])
+  const [recommended, setRecommended] = useState<ApiProduct[]>([])
+  const [recentlyViewed, setRecentlyViewed] = useState<ApiProduct[]>([])
 
   useEffect(() => {
     Promise.all([
@@ -47,6 +104,35 @@ export default function Home() {
       })
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    Promise.all([
+      api.get<DiscoveryResponse>("/search/products?sort=newest&page_size=4"),
+      api.get<DiscoveryResponse>("/search/products?sort=popular&page_size=4"),
+    ]).then(([newest, popular]) => {
+      setNewArrivals(newest.results.map(toProduct))
+      setTrending(popular.results.map(toProduct))
+    }).catch(() => {
+      setNewArrivals([])
+      setTrending([])
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return
+    }
+    Promise.all([
+      api.get<DiscoveryResponse>("/recommendations?limit=4"),
+      api.get<DiscoveryResponse>("/recommendations/recently-viewed?limit=4"),
+    ]).then(([recs, recent]) => {
+      setRecommended(recs.results.map(toProduct))
+      setRecentlyViewed(recent.results.map(toProduct))
+    }).catch(() => {
+      setRecommended([])
+      setRecentlyViewed([])
+    })
+  }, [isAuthenticated])
 
   const filtered = activeCat
     ? products.filter((p) => p.category_id === activeCat)
@@ -281,6 +367,11 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          <ProductSection title="Recommended for You" products={isAuthenticated ? recommended : []} />
+          <ProductSection title="Trending Now" products={trending} href="/products?sort=popular" />
+          <ProductSection title="New Arrivals" products={newArrivals} href="/products?sort=newest" />
+          <ProductSection title="Recently Viewed" products={isAuthenticated ? recentlyViewed : []} />
         </div>
       </div>
 

@@ -445,13 +445,15 @@ export default function BecomeSellerPage() {
                 </FieldLabel>
                 <FieldDescription>Select at least one category for your business.</FieldDescription>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {categoryError ? (
-                    <span className="text-sm text-red-500">Failed to load categories. Please refresh the page.</span>
-                  ) : categories.length === 0 ? (
+                  {loading ? (
                     <div className="flex items-center gap-2 py-1">
                       <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                       <span className="text-sm text-muted-foreground">Loading categories...</span>
                     </div>
+                  ) : categoryError ? (
+                    <span className="text-sm text-red-500">Failed to load categories. Please refresh the page.</span>
+                  ) : categories.length === 0 ? (
+                    <span className="text-sm text-muted-foreground">No business categories are available yet.</span>
                   ) : (
                     categories.map((cat) => (
                       <button

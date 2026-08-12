@@ -296,12 +296,10 @@ export default function CartPage() {
                 </div>
               </div>
 
-              {subtotal < 50000 && (
-                <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-2.5 text-xs text-primary">
-                  <Truck className="size-4 shrink-0" />
-                  {`Add ${formatPrice(50000 - subtotal)} more to qualify for free shipping on selected routes`}
-                </div>
-              )}
+              <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-2.5 text-xs text-primary">
+                <Truck className="size-4 shrink-0" />
+                Delivery prices and any free-shipping threshold are calculated from your address at checkout.
+              </div>
 
               <Separator />
 

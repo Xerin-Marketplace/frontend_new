@@ -116,6 +116,7 @@ type ShippingQuoteOption = {
   currency: string
   min_delivery_days: number
   max_delivery_days: number
+  free_shipping_threshold: number | null
 }
 
 type PerSellerQuote = {
@@ -228,6 +229,9 @@ export default function CheckoutPage() {
   const perSellerShippingTotal = perSellerQuotes.reduce((sum, q) => sum + Number(q.shipping_amount), 0)
   // Compute actual shipping cost from selected quote (fallback)
   const selectedQuote = shippingQuotes.find((q) => q.rate_id === selectedRateId)
+  const freeShippingRemaining = selectedQuote?.free_shipping_threshold
+    ? Math.max(0, Number(selectedQuote.free_shipping_threshold) - subtotal)
+    : null
   const computedShippingCost = perSellerQuotes.length > 0 ? perSellerShippingTotal : (selectedQuote ? Number(selectedQuote.amount) : 0)
   const computedTotal = subtotal - discount + computedShippingCost
 
@@ -1669,6 +1673,12 @@ export default function CheckoutPage() {
                       Sign in or create account to continue
                     </Button>
                     <p className="text-xs text-muted-foreground">Complete the form above to place your order</p>
+                  </div>
+                )}
+                {freeShippingRemaining !== null && freeShippingRemaining > 0 && (
+                  <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-2.5 text-xs text-primary">
+                    <Truck className="size-4 shrink-0" />
+                    Add {formatPrice(freeShippingRemaining)} more for free shipping with the selected delivery rate.
                   </div>
                 )}
               </div>

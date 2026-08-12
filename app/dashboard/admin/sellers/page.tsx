@@ -212,6 +212,8 @@ export default function AdminSellersPage() {
   const [actionLoading, setActionLoading] = React.useState(false)
   const [registerOpen, setRegisterOpen] = React.useState(false)
   const [categories, setCategories] = React.useState<BusinessCategory[]>([])
+  const [categoriesLoading, setCategoriesLoading] = React.useState(false)
+  const [categoriesError, setCategoriesError] = React.useState(false)
   const [regForm, setRegForm] = React.useState({
     first_name: "",
     last_name: "",
@@ -361,9 +363,12 @@ export default function AdminSellersPage() {
     setSelectedCategoryIds([])
     setRegForm({ first_name: "", last_name: "", email: "", phone: "", password: "", business_name: "" })
     if (categories.length === 0) {
+      setCategoriesLoading(true)
+      setCategoriesError(false)
       api.get<BusinessCategory[]>("/admin/business-categories")
         .then(setCategories)
-        .catch(() => {})
+        .catch(() => setCategoriesError(true))
+        .finally(() => setCategoriesLoading(false))
     }
   }
 
@@ -892,8 +897,12 @@ export default function AdminSellersPage() {
                 <FieldLabel>Business Categories *</FieldLabel>
                 <p className="text-xs text-muted-foreground">Select at least one category.</p>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {categories.length === 0 ? (
+                  {categoriesLoading ? (
                     <span className="text-sm text-muted-foreground">Loading categories...</span>
+                  ) : categoriesError ? (
+                    <span className="text-sm text-red-500">Failed to load categories. Close and retry.</span>
+                  ) : categories.length === 0 ? (
+                    <span className="text-sm text-muted-foreground">No business categories are available yet.</span>
                   ) : (
                     categories.map((cat) => (
                       <button

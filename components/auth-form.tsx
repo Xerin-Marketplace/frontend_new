@@ -127,12 +127,13 @@ function AuthFormInner({
   const [sellerPassword, setSellerPassword] = useState("")
   const [sellerAgreement, setSellerAgreement] = useState(false)
   const [categories, setCategories] = useState<BusinessCategory[]>([])
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([])
   const [categoryError, setCategoryError] = useState(false)
   const [sellerErrors, setSellerErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    if (mode === "seller" && categories.length === 0) {
+    if (mode === "seller" && !categoriesLoading && categories.length === 0 && !categoryError) {
       api.get<BusinessCategory[]>("/admin/business-categories")
         .then((data) => {
           setCategories(data)
@@ -142,8 +143,9 @@ function AuthFormInner({
           setCategories([])
           setCategoryError(true)
         })
+        .finally(() => setCategoriesLoading(false))
     }
-  }, [mode, categories.length])
+  }, [mode, categories.length, categoriesLoading, categoryError])
 
   const toggleCategory = (id: string) => {
     setSelectedCategoryIds((prev) =>
@@ -733,10 +735,12 @@ function AuthFormInner({
                 <FieldLabel>Business Categories</FieldLabel>
                 <FieldDescription>Select at least one category for your business.</FieldDescription>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {categoryError ? (
+                  {categoriesLoading ? (
+                    <span className="text-sm text-muted-foreground">Loading categories...</span>
+                  ) : categoryError ? (
                     <span className="text-sm text-red-500">Failed to load categories. Please refresh the page.</span>
                   ) : categories.length === 0 ? (
-                    <span className="text-sm text-muted-foreground">Loading categories...</span>
+                    <span className="text-sm text-muted-foreground">No business categories are available yet.</span>
                   ) : (
                     categories.map((cat) => (
                       <button
